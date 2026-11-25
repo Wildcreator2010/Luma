@@ -5,7 +5,7 @@
 //! - `token`：Token 模型与 Windows Credential Manager 存储
 //! - `mqtt`：TLS MQTT 订阅与重连
 //!
-//! 协议细节来自公开社区资料（见 `docs/PROTOCOL.md`），真实账号与 X2D 联调
+//! 协议细节来自公开社区资料（详细调研未随公开仓库发布），真实账号与 X2D 联调
 //! 仍是必须的验收步骤。日志中禁止输出 Token。
 
 pub mod auth;

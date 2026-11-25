@@ -69,11 +69,21 @@ if ($Full) {
 if (-not $SkipBuild) {
     Write-Host "`n[1/4] cargo build --release" -ForegroundColor Cyan
     Push-Location $root
+    $previousRustFlags = $env:RUSTFLAGS
     try {
+        # 公开二进制不应泄露本机用户目录或第三方 registry 路径。
+        $remap = @(
+            "--remap-path-prefix=$root=.",
+            "--remap-path-prefix=$env:USERPROFILE=~",
+            "-C",
+            "target-feature=+crt-static"
+        ) -join " "
+        $env:RUSTFLAGS = if ($previousRustFlags) { "$previousRustFlags $remap" } else { $remap }
         cargo build -p luma-desktop --release
         if ($LASTEXITCODE -ne 0) { throw "cargo build 失败（exit $LASTEXITCODE）" }
     }
     finally {
+        $env:RUSTFLAGS = $previousRustFlags
         Pop-Location
     }
 }

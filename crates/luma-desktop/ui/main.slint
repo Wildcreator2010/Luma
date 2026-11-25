@@ -1,0 +1,2979 @@
+// Luma Desktop — macOS System Settings inspired UI.
+// 视觉方向：Apple macOS 系统设置 / 音乐 / 访达。只重写视觉层，Rust 数据契约不变。
+// 强调色仅系统蓝；状态色仅系统绿 / 橙 / 红 / 灰；无渐变、无玻璃、无彩色图标。
+
+import { ScrollView } from "std-widgets.slint";
+
+export struct PrinterItem {
+    name: string,
+    model: string,
+    serial: string,
+    status: string,
+    status-kind: int,
+    progress: float,
+    progress-text: string,
+    progress-known: bool,
+    task: string,
+    remaining: string,
+    nozzle: string,
+    nozzle-target: string,
+    nozzle-value: float,
+    bed: string,
+    bed-target: string,
+    bed-value: float,
+    layers: string,
+    layer-card: string,
+    layer-current: int,
+    layer-total: int,
+    layer-progress: float,
+}
+
+export struct ArcDot {
+    angle: float,
+}
+
+export global Palette {
+    in-out property <bool> dark: true;
+
+    // Surfaces — macOS 系统设置的三段灰阶。
+    out property <color> window-bg: dark ? #1C1C1E : #F5F5F7;
+    out property <color> content-bg: dark ? #1E1E1E : #FFFFFF;
+    out property <color> sidebar-bg: dark ? #232325 : #EFEFF2;
+    out property <color> card-bg: dark ? #2C2C2E : #FFFFFF;
+    // 顶部状态条：不透明底，配合 Win32 圆角 Region 形成悬浮条。
+    out property <color> bar-bg: dark ? #232325 : #FFFFFF;
+
+    // Lines
+    out property <color> separator: dark ? #FFFFFF14 : #00000014;
+    out property <color> card-border: dark ? #FFFFFF0F : #0000000F;
+    out property <color> field-border: dark ? #3A3A3C : #D2D2D7;
+
+    // Type
+    out property <color> text-primary: dark ? #F5F5F7 : #1D1D1F;
+    out property <color> text-secondary: dark ? #98989D : #6E6E73;
+    out property <color> text-tertiary: dark ? #8E8E93 : #86868B;
+
+    // Controls
+    out property <color> field-bg: dark ? #1C1C1E : #FFFFFF;
+    out property <color> hover-bg: dark ? #FFFFFF0A : #00000008;
+    out property <color> selection-bg: dark ? #3A3A3C : #E5E5EA;
+    out property <color> track: dark ? #3A3A3C : #E5E5EA;
+    out property <color> segmented-track: dark ? #3A3A3C : #E5E5EA;
+    out property <color> segmented-selected: dark ? #48484A : #FFFFFF;
+
+    // Single system accent
+    out property <color> accent: dark ? #0A84FF : #0071E3;
+    out property <color> accent-hover: dark ? #409CFF : #0077ED;
+    out property <color> accent-ring: dark ? #0A84FF33 : #0071E31F;
+    out property <color> on-accent: #FFFFFF;
+
+    // System status colors
+    out property <color> success: dark ? #30D158 : #34C759;
+    out property <color> warning: #FF9F0A;
+    out property <color> danger: dark ? #FF453A : #FF3B30;
+    out property <color> neutral: #8E8E93;
+}
+
+export component LumaTray inherits SystemTrayIcon {
+    in property <string> printer-summary: "";
+    in-out property <bool> bar-visible: true;
+    callback show-window();
+    callback toggle-bar();
+    callback open-bar-settings();
+    callback quit-app();
+
+    icon: @image-url("../assets/tray.png");
+    tooltip: "Luma  ·  " + root.printer-summary;
+    clicked => {
+        root.show-window();
+    }
+
+    Menu {
+        MenuItem {
+            title: "显示 Luma";
+            activated => {
+                root.show-window();
+            }
+        }
+        MenuItem {
+            title: "顶部状态条";
+            checkable: true;
+            checked: root.bar-visible;
+            activated => {
+                root.toggle-bar();
+            }
+        }
+        MenuItem {
+            title: "状态条设置…";
+            activated => {
+                root.open-bar-settings();
+            }
+        }
+        MenuSeparator { }
+        MenuItem {
+            title: "退出";
+            activated => {
+                root.quit-app();
+            }
+        }
+    }
+}
+
+component Dot inherits Rectangle {
+    in property <color> tone: Palette.neutral;
+    in property <length> size: 8px;
+
+    width: size;
+    height: size;
+    border-radius: size / 2;
+    background: root.tone;
+    animate background { duration: 180ms; easing: ease-out; }
+}
+
+component BrandMark inherits Rectangle {
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    clip: true;
+
+    Image {
+        width: parent.width;
+        height: parent.height;
+        source: @image-url("../assets/app-icon.png");
+        image-fit: contain;
+    }
+}
+
+component OutlineButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 28px;
+    border-radius: 8px;
+    background: root.enabled && hover.has-hover ? Palette.hover-bg : transparent;
+    animate background { duration: 120ms; easing: ease-out; }
+    border-width: 1px;
+    border-color: Palette.field-border;
+
+    Text {
+        text: root.label;
+        color: root.enabled ? Palette.text-secondary : Palette.text-tertiary;
+        font-size: 13px;
+        font-weight: 500;
+        width: parent.width;
+        height: parent.height;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    hover := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        enabled: root.enabled;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+component TextLink inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 20px;
+    background: transparent;
+
+    HorizontalLayout {
+        alignment: start;
+        cross-axis-alignment: center;
+
+        Text {
+            text: root.label;
+            color: !root.enabled
+                ? Palette.text-tertiary
+                : (hover.has-hover ? Palette.accent-hover : Palette.accent);
+            animate color { duration: 120ms; easing: ease-out; }
+            font-size: 13px;
+            font-weight: 500;
+            vertical-alignment: center;
+        }
+    }
+
+    hover := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        enabled: root.enabled;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component LoginWindow inherits Window {
+    title: "登录 Luma";
+    width: 360px;
+    height: 320px;
+    icon: @image-url("../assets/app-icon.png");
+    background: Palette.window-bg;
+    default-font-family: "Segoe UI Variable Display";
+    default-font-size: 13px;
+
+    in-out property <bool> dark-mode <=> Palette.dark;
+    in property <string> app-version: "0.1.1";
+    in-out property <bool> busy: false;
+    in-out property <string> message: "";
+    in-out property <bool> message-error: false;
+
+    callback browser-login();
+    callback cancel();
+
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        border-radius: 10px;
+        background: Palette.content-bg;
+        border-width: 1px;
+        border-color: Palette.separator;
+        drop-shadow-color: #0000001A;
+        drop-shadow-blur: 24px;
+        drop-shadow-offset-y: 8px;
+
+        VerticalLayout {
+            padding: 24px;
+            spacing: 12px;
+
+            HorizontalLayout {
+                height: 32px;
+                alignment: center;
+
+                BrandMark { }
+            }
+
+            Text {
+                text: "登录 Bambu 账号";
+                color: Palette.text-primary;
+                font-size: 17px;
+                font-weight: 600;
+                horizontal-alignment: center;
+            }
+
+            Text {
+                text: "手机号、验证码和人机验证都在官方页面完成";
+                color: Palette.text-tertiary;
+                font-size: 11px;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+                max-lines: 2;
+                overflow: elide;
+            }
+
+            // 唯一主操作：官方浏览器登录。
+            Rectangle {
+                height: 34px;
+                border-radius: 8px;
+                background: root.busy
+                    ? Palette.accent
+                    : (login-hover.has-hover ? Palette.accent-hover : Palette.accent);
+                opacity: root.busy ? 0.72 : 1;
+
+                Text {
+                    text: root.busy ? "等待浏览器登录…" : "浏览器登录（官方页面）";
+                    color: Palette.on-accent;
+                    font-size: 13px;
+                    font-weight: 600;
+                    width: parent.width;
+                    height: parent.height;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                login-hover := TouchArea {
+                    width: parent.width;
+                    height: parent.height;
+                    enabled: !root.busy;
+                    clicked => {
+                        root.browser-login();
+                    }
+                }
+            }
+
+            if root.message != "" : Text {
+                text: root.message;
+                color: root.message-error ? Palette.danger : Palette.text-secondary;
+                font-size: 11px;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+                max-lines: 3;
+                overflow: elide;
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                background: transparent;
+            }
+
+            Rectangle {
+                height: 1px;
+                background: Palette.separator;
+            }
+
+            HorizontalLayout {
+                height: 20px;
+                spacing: 8px;
+
+                TextLink {
+                    label: "取消";
+                    clicked => {
+                        root.cancel();
+                    }
+                }
+
+                Rectangle {
+                    horizontal-stretch: 1;
+                    background: transparent;
+                }
+
+                Text {
+                    text: "v" + root.app-version + " · GPL-3.0";
+                    color: Palette.text-tertiary;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                }
+            }
+
+            Text {
+                text: "Token 保存在 Windows Credential Manager";
+                color: Palette.text-tertiary;
+                font-size: 11px;
+                horizontal-alignment: center;
+            }
+        }
+    }
+}
+
+component StatusPill inherits Rectangle {
+    in property <string> label;
+    in property <int> kind: 0;
+
+    property <color> tone: kind == 2
+        ? Palette.warning
+        : (kind == 4 ? Palette.success : ((kind == 1 || kind == 5) ? Palette.accent : Palette.neutral));
+
+    width: 88px;
+    height: 20px;
+    background: transparent;
+
+    HorizontalLayout {
+        spacing: 6px;
+        cross-axis-alignment: center;
+
+        Dot {
+            size: 7px;
+            tone: root.tone;
+        }
+        Text {
+            text: root.label;
+            color: Palette.text-secondary;
+            font-size: 11px;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+component PrinterRow inherits Rectangle {
+    in property <PrinterItem> item;
+    in property <bool> selected: false;
+    callback clicked();
+
+    property <color> tone: (item.status-kind == 1 || item.status-kind == 5)
+        ? Palette.accent
+        : (item.status-kind == 2
+            ? Palette.warning
+            : (item.status-kind == 4 ? Palette.success : Palette.neutral));
+
+    height: 44px;
+    border-radius: 8px;
+    background: root.selected
+        ? Palette.selection-bg
+        : (hover.has-hover ? Palette.hover-bg : transparent);
+    animate background { duration: 150ms; easing: ease-out; }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 8px;
+        cross-axis-alignment: center;
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 1px;
+
+            Text {
+                text: root.item.name;
+                color: Palette.text-primary;
+                font-size: 13px;
+                font-weight: root.selected ? 600 : 500;
+                overflow: elide;
+            }
+            Text {
+                text: root.item.model == "" ? root.item.status : root.item.model;
+                color: Palette.text-tertiary;
+                font-size: 11px;
+                overflow: elide;
+            }
+        }
+
+        Dot {
+            size: 8px;
+            tone: root.tone;
+        }
+    }
+
+    hover := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+component Ring inherits Rectangle {
+    in property <float> progress: 0;
+    in property <color> tone: Palette.accent;
+    in property <[ArcDot]> dots: [];
+    in property <bool> known: true;
+
+    property <float> visual-progress: progress;
+    animate visual-progress {
+        duration: 700ms;
+        easing: ease-out;
+    }
+
+    property <float> clamped: Math.max(0, Math.min(100, visual-progress));
+    property <float> widthp: self.width / 1px;
+    property <float> heightp: self.height / 1px;
+    property <float> radiusp: (Math.min(widthp, heightp) - 8) / 2;
+    property <float> cxp: widthp / 2;
+    property <float> cyp: heightp / 2;
+    property <float> deg: clamped * 3.6;
+    property <float> exp: cxp + radiusp * Math.sin(deg * 1deg);
+    property <float> eyp: cyp - radiusp * Math.cos(deg * 1deg);
+
+    background: transparent;
+
+    // 8px 轨道；480 个 8px 圆点沿同一中心线重叠成连续弧。
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        border-radius: self.width / 2;
+        border-width: 8px;
+        border-color: Palette.track;
+        background: transparent;
+    }
+
+    for dot in root.dots : Rectangle {
+        width: 8px;
+        height: 8px;
+        border-radius: 4px;
+        x: root.cxp * 1px + root.radiusp * Math.sin(dot.angle * 1deg) * 1px - 4px;
+        y: root.cyp * 1px - root.radiusp * Math.cos(dot.angle * 1deg) * 1px - 4px;
+        background: root.tone;
+        visible: root.known && dot.angle <= root.deg && root.clamped > 0.2;
+    }
+
+    Rectangle {
+        x: root.exp * 1px - 4px;
+        y: root.eyp * 1px - 4px;
+        width: 8px;
+        height: 8px;
+        border-radius: 4px;
+        background: root.tone;
+        visible: root.known && root.clamped > 0.2;
+    }
+}
+
+component Bar inherits Rectangle {
+    in property <float> value: 0;
+    in property <color> tone: Palette.accent;
+
+    height: 6px;
+    border-radius: 3px;
+    background: Palette.track;
+
+    Rectangle {
+        x: 0;
+        width: parent.width * Math.max(0, Math.min(100, root.value)) / 100;
+        height: parent.height;
+        border-radius: 3px;
+        background: root.tone;
+
+        animate width {
+            duration: 600ms;
+            easing: ease-out;
+        }
+    }
+}
+
+component StatCard inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <string> hint;
+
+    height: 44px;
+    background: transparent;
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 12px;
+        cross-axis-alignment: center;
+
+        Text {
+            text: root.label;
+            color: Palette.text-primary;
+            font-size: 13px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+
+        VerticalLayout {
+            spacing: 0;
+            alignment: center;
+
+            Text {
+                text: root.value;
+                color: Palette.text-primary;
+                font-size: 13px;
+                font-weight: 600;
+                horizontal-alignment: right;
+                overflow: elide;
+            }
+            Text {
+                text: root.hint;
+                color: Palette.text-tertiary;
+                font-size: 11px;
+                horizontal-alignment: right;
+                overflow: elide;
+            }
+        }
+    }
+}
+
+component ActivityRow inherits Rectangle {
+    in property <string> time;
+    in property <string> message;
+    in property <color> tone: Palette.neutral;
+
+    height: 44px;
+    background: transparent;
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 12px;
+        cross-axis-alignment: center;
+
+        Dot {
+            size: 8px;
+            tone: root.tone;
+        }
+        Text {
+            text: root.message;
+            color: Palette.text-primary;
+            font-size: 13px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+        Text {
+            text: root.time;
+            color: Palette.text-tertiary;
+            font-size: 11px;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component InsetDivider inherits Rectangle {
+    height: 1px;
+    background: transparent;
+
+    Rectangle {
+        x: 16px;
+        width: parent.width - 16px;
+        height: 1px;
+        background: Palette.separator;
+    }
+}
+
+component ChoiceChip inherits Rectangle {
+    in property <string> label;
+    in property <bool> selected: false;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 26px;
+    border-radius: 6px;
+    background: root.selected ? Palette.segmented-selected : transparent;
+    opacity: root.enabled ? 1.0 : 0.4;
+    animate background { duration: 120ms; easing: ease-out; }
+    animate opacity { duration: 120ms; easing: ease-out; }
+
+    Text {
+        text: root.label;
+        color: root.selected ? Palette.text-primary : Palette.text-secondary;
+        animate color { duration: 120ms; easing: ease-out; }
+        font-size: 12px;
+        font-weight: root.selected ? 600 : 400;
+        width: parent.width;
+        height: parent.height;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+component Sparkline inherits Rectangle {
+    in property <[float]> values: [];
+    in property <float> maximum: 300;
+    in property <color> tone: Palette.accent;
+
+    background: transparent;
+    clip: true;
+
+    property <int> count: Math.max(1, root.values.length);
+    property <length> bar-width: root.width / root.count;
+
+    for value[i] in root.values : Rectangle {
+        x: i * root.bar-width;
+        width: Math.max(1px, root.bar-width - 1px);
+        height: Math.max(1px, root.height * Math.min(1, Math.max(0, value / root.maximum)));
+        y: root.height - self.height;
+        border-radius: 1px;
+        background: root.tone;
+        opacity: 0.35 + 0.65 * (i / root.count);
+    }
+}
+
+/// 设置页使用的轻量滑块。
+component LumaSlider inherits Rectangle {
+    in-out property <float> value: 0.5;
+    in property <bool> enabled: true;
+    callback changed();
+
+    height: 24px;
+    background: transparent;
+    opacity: root.enabled ? 1.0 : 0.4;
+    animate opacity { duration: 120ms; easing: ease-out; }
+
+    Rectangle {
+        y: 9px;
+        width: parent.width;
+        height: 4px;
+        border-radius: 2px;
+        background: Palette.segmented-track;
+    }
+
+    Rectangle {
+        y: 9px;
+        width: parent.width * Math.min(1, Math.max(0, root.value));
+        height: 4px;
+        border-radius: 2px;
+        background: Palette.accent;
+        animate width { duration: 90ms; easing: ease-out; }
+    }
+
+    Rectangle {
+        x: (parent.width - 14px) * Math.min(1, Math.max(0, root.value));
+        y: 4px;
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
+        background: Palette.text-primary;
+        animate x { duration: 90ms; easing: ease-out; }
+        border-width: 1px;
+        border-color: Palette.window-bg;
+    }
+
+    TouchArea {
+        enabled: root.enabled;
+        changed pressed => {
+            if (self.pressed) {
+                root.value = Math.min(1, Math.max(0, self.mouse-x / self.width));
+                root.changed();
+            }
+        }
+        moved => {
+            if (self.pressed) {
+                root.value = Math.min(1, Math.max(0, self.mouse-x / self.width));
+                root.changed();
+            }
+        }
+    }
+}
+
+/// 主界面右侧的「设置」页：状态条的位置/大小/外观都在这里改。
+component LumaSwitch inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <bool> enabled: true;
+    callback toggled();
+
+    width: 38px;
+    height: 22px;
+    border-radius: 11px;
+    background: root.checked ? Palette.accent : Palette.segmented-track;
+    opacity: root.enabled ? 1.0 : 0.4;
+    animate background { duration: 120ms; easing: ease-out; }
+    animate opacity { duration: 120ms; easing: ease-out; }
+
+    Rectangle {
+        x: root.checked ? 18px : 2px;
+        y: 2px;
+        width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        background: #FFFFFF;
+        animate x { duration: 120ms; easing: ease-out; }
+    }
+
+    TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled();
+        }
+    }
+}
+
+component SettingsRow inherits Rectangle {
+    in property <string> title;
+    in property <string> description: "";
+    in property <bool> last: false;
+
+    height: 52px;
+    background: transparent;
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 16px;
+        cross-axis-alignment: center;
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 2px;
+
+            Text {
+                text: root.title;
+                color: Palette.text-primary;
+                font-size: 13px;
+            }
+            if root.description != "" : Text {
+                text: root.description;
+                color: Palette.text-tertiary;
+                font-size: 11px;
+            }
+        }
+
+        @children
+    }
+
+    if !root.last : Rectangle {
+        x: 16px;
+        y: parent.height - 1px;
+        width: parent.width - 16px;
+        height: 1px;
+        background: Palette.separator;
+    }
+}
+
+/// 主界面右侧的「设置」页，布局照 ClassIsland 的 SettingsExpander 分组卡片。
+component SettingsPage inherits Rectangle {
+    in property <string> app-version: "0.1.1";
+    in-out property <bool> bar-visible: false;
+    in-out property <int> bar-monitor: 0;
+    in-out property <int> bar-dock: 0;
+    in-out property <int> bar-align: 1;
+    in-out property <bool> bar-auto-width: true;
+    in-out property <length> bar-width: 760px;
+    in-out property <length> bar-height: 40px;
+    in-out property <length> bar-radius: 10px;
+    in-out property <float> bar-opacity: 0.85;
+    in-out property <length> bar-offset: 0px;
+    in-out property <float> bar-scale: 1.0;
+    in-out property <bool> bar-show-brand: true;
+    in-out property <bool> bar-show-name: true;
+    in-out property <bool> bar-show-status: true;
+    in-out property <bool> bar-show-progress: true;
+    in-out property <bool> bar-show-remaining: true;
+    in-out property <bool> bar-show-progress-bar: true;
+    in-out property <bool> bar-show-clock: true;
+    in-out property <bool> bar-clock-seconds: false;
+    in-out property <bool> bar-show-date: false;
+    in-out property <bool> bar-show-battery: false;
+    in-out property <string> bar-custom-text: "";
+    in-out property <bool> bar-smart-sort: true;
+    in-out property <int> bar-max-printers: 3;
+    in-out property <bool> bar-hide-hover: true;
+    in-out property <bool> bar-hide-fullscreen: false;
+    in-out property <bool> dark-mode: true;
+
+    callback changed();
+    callback theme-toggle();
+
+    background: Palette.content-bg;
+    animate background { duration: 180ms; easing: ease-out; }
+
+    ScrollView {
+        width: parent.width;
+        height: parent.height;
+
+        VerticalLayout {
+            width: parent.width;
+            padding: 20px;
+            padding-right: 28px;
+            spacing: 14px;
+            alignment: start;
+
+            // 常规
+            VerticalLayout {
+                spacing: 8px;
+
+                Text {
+                    text: "常规";
+                    color: Palette.text-secondary;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Rectangle {
+                    border-radius: 10px;
+                    background: Palette.card-bg;
+                    border-width: 1px;
+                    border-color: Palette.card-border;
+                    clip: true;
+
+                    VerticalLayout {
+                        spacing: 0;
+
+                        SettingsRow {
+                            title: "显示状态条";
+                            description: "关闭后可从托盘菜单重新打开";
+
+                            LumaSwitch {
+                                checked <=> root.bar-visible;
+                                toggled => {
+                                    root.changed();
+                                }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "主题";
+                            description: "深色 / 浅色";
+                            last: true;
+
+                            Rectangle {
+                                width: 180px;
+                                height: 32px;
+                                border-radius: 7px;
+                                background: Palette.segmented-track;
+
+                                HorizontalLayout {
+                                    padding: 3px;
+                                    spacing: 3px;
+
+                                    ChoiceChip {
+                                        label: "深色";
+                                        selected: root.dark-mode;
+                                        horizontal-stretch: 1;
+                                        clicked => {
+                                            if (!root.dark-mode) {
+                                                root.theme-toggle();
+                                            }
+                                        }
+                                    }
+                                    ChoiceChip {
+                                        label: "浅色";
+                                        selected: !root.dark-mode;
+                                        horizontal-stretch: 1;
+                                        clicked => {
+                                            if (root.dark-mode) {
+                                                root.theme-toggle();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 位置与尺寸
+            VerticalLayout {
+                spacing: 8px;
+
+                Text {
+                    text: "位置与尺寸";
+                    color: Palette.text-secondary;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Rectangle {
+                    border-radius: 10px;
+                    background: Palette.card-bg;
+                    border-width: 1px;
+                    border-color: Palette.card-border;
+                    clip: true;
+
+                    VerticalLayout {
+                        spacing: 0;
+
+                        SettingsRow {
+                            title: "屏幕";
+                            description: "多显示器时选择状态条所在屏幕";
+
+                            Rectangle {
+                                width: 220px;
+                                height: 28px;
+                                border-radius: 7px;
+                                background: Palette.segmented-track;
+
+                                HorizontalLayout {
+                                    padding: 3px;
+                                    spacing: 3px;
+                                    ChoiceChip { label: "主屏"; selected: root.bar-monitor == 0; horizontal-stretch: 1; clicked => { root.bar-monitor = 0; root.changed(); } }
+                                    ChoiceChip { label: "鼠标所在"; selected: root.bar-monitor == 1; horizontal-stretch: 1; clicked => { root.bar-monitor = 1; root.changed(); } }
+                                }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "停靠";
+                            description: "顶部、底部或任务栏；任务栏模式会自动避开图标";
+
+                            Rectangle {
+                                width: 300px;
+                                height: 28px;
+                                border-radius: 7px;
+                                background: Palette.segmented-track;
+
+                                HorizontalLayout {
+                                    padding: 3px;
+                                    spacing: 3px;
+                                    ChoiceChip { label: "顶部"; selected: root.bar-dock == 0; horizontal-stretch: 1; clicked => { root.bar-dock = 0; root.changed(); } }
+                                    ChoiceChip { label: "底部"; selected: root.bar-dock == 1; horizontal-stretch: 1; clicked => { root.bar-dock = 1; root.changed(); } }
+                                    ChoiceChip { label: "任务栏"; selected: root.bar-dock == 2; horizontal-stretch: 1; clicked => { root.bar-dock = 2; root.changed(); } }
+                                }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "对齐";
+                            description: root.bar-dock == 2 ? "任务栏模式会自动贴近图标" : "状态条在屏幕上的水平位置";
+
+                            Rectangle {
+                                width: 220px;
+                                height: 28px;
+                                border-radius: 7px;
+                                background: Palette.segmented-track;
+
+                                HorizontalLayout {
+                                    padding: 3px;
+                                    spacing: 3px;
+                                    ChoiceChip { label: "靠左"; enabled: root.bar-dock != 2; selected: root.bar-align == 0; horizontal-stretch: 1; clicked => { root.bar-align = 0; root.changed(); } }
+                                    ChoiceChip { label: "居中"; enabled: root.bar-dock != 2; selected: root.bar-align == 1; horizontal-stretch: 1; clicked => { root.bar-align = 1; root.changed(); } }
+                                    ChoiceChip { label: "靠右"; enabled: root.bar-dock != 2; selected: root.bar-align == 2; horizontal-stretch: 1; clicked => { root.bar-align = 2; root.changed(); } }
+                                }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "距边缘";
+                            description: "0–64 px";
+
+                            offset-slider := LumaSlider {
+                                width: 200px;
+                                enabled: root.bar-dock != 2;
+                                value: root.bar-offset / 64px;
+                                changed => {
+                                    root.bar-offset = Math.round(offset-slider.value * 32) * 2px;
+                                    root.changed();
+                                }
+                            }
+                            Text {
+                                text: root.bar-dock == 2 ? "自动" : Math.round(root.bar-offset / 1px) + " px";
+                                color: Palette.text-secondary;
+                                font-size: 12px;
+                                width: 56px;
+                                horizontal-alignment: right;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "自动宽度";
+                            description: root.bar-dock == 2 ? "自动适配任务栏空白区域" : "按打印机数量和显示内容自动调整";
+
+                            LumaSwitch {
+                                checked <=> root.bar-auto-width;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "宽度";
+                            description: root.bar-auto-width ? "自动模式下由内容决定" : "280–1400 px";
+
+                            width-slider := LumaSlider {
+                                width: 200px;
+                                enabled: !root.bar-auto-width;
+                                value: (root.bar-width - 280px) / 1120px;
+                                changed => {
+                                    root.bar-width = 280px + Math.round(width-slider.value * 56) * 20px;
+                                    root.changed();
+                                }
+                            }
+                            Text {
+                                text: root.bar-auto-width ? "自动" : Math.round(root.bar-width / 1px) + " px";
+                                color: Palette.text-secondary;
+                                font-size: 12px;
+                                width: 56px;
+                                horizontal-alignment: right;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "高度";
+                            description: root.bar-dock == 2 ? "24–64 px；任务栏内自动适配高度" : "24–64 px；高缩放会自动提高最小高度";
+                            last: true;
+
+                            height-slider := LumaSlider {
+                                width: 200px;
+                                value: (root.bar-height - 24px) / 40px;
+                                changed => {
+                                    root.bar-height = 24px + Math.round(height-slider.value * 40) * 1px;
+                                    root.changed();
+                                }
+                            }
+                            Text {
+                                text: Math.round(root.bar-height / 1px) + " px";
+                                color: Palette.text-secondary;
+                                font-size: 12px;
+                                width: 56px;
+                                horizontal-alignment: right;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 外观
+            VerticalLayout {
+                spacing: 8px;
+
+                Text {
+                    text: "外观";
+                    color: Palette.text-secondary;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Rectangle {
+                    border-radius: 10px;
+                    background: Palette.card-bg;
+                    border-width: 1px;
+                    border-color: Palette.card-border;
+                    clip: true;
+
+                    VerticalLayout {
+                        spacing: 0;
+
+                        SettingsRow {
+                            title: "缩放";
+                            description: "80–160%";
+
+                            scale-slider := LumaSlider {
+                                width: 200px;
+                                value: (root.bar-scale - 0.8) / 0.8;
+                                changed => {
+                                    root.bar-scale = 0.8 + Math.round(scale-slider.value * 16) * 0.05;
+                                    root.changed();
+                                }
+                            }
+                            Text {
+                                text: Math.round(root.bar-scale * 100) + "%";
+                                color: Palette.text-secondary;
+                                font-size: 12px;
+                                width: 56px;
+                                horizontal-alignment: right;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "圆角";
+                            description: "0–32 px";
+
+                            radius-slider := LumaSlider {
+                                width: 200px;
+                                value: root.bar-radius / 32px;
+                                changed => {
+                                    root.bar-radius = Math.round(radius-slider.value * 32) * 1px;
+                                    root.changed();
+                                }
+                            }
+                            Text {
+                                text: Math.round(root.bar-radius / 1px) + " px";
+                                color: Palette.text-secondary;
+                                font-size: 12px;
+                                width: 56px;
+                                horizontal-alignment: right;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "不透明度";
+                            description: "20–100%";
+                            last: true;
+
+                            opacity-slider := LumaSlider {
+                                width: 200px;
+                                value: (root.bar-opacity - 0.2) / 0.8;
+                                changed => {
+                                    root.bar-opacity = 0.2 + Math.round(opacity-slider.value * 16) * 0.05;
+                                    root.changed();
+                                }
+                            }
+                            Text {
+                                text: Math.round(root.bar-opacity * 100) + "%";
+                                color: Palette.text-secondary;
+                                font-size: 12px;
+                                width: 56px;
+                                horizontal-alignment: right;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 工具栏
+            VerticalLayout {
+                spacing: 8px;
+
+                Text {
+                    text: "工具栏";
+                    color: Palette.text-secondary;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Rectangle {
+                    border-radius: 10px;
+                    background: Palette.card-bg;
+                    border-width: 1px;
+                    border-color: Palette.card-border;
+                    clip: true;
+
+                    VerticalLayout {
+                        spacing: 0;
+
+                        SettingsRow {
+                            title: "时钟";
+                            description: "在状态条左侧显示当前时间";
+
+                            LumaSwitch {
+                                checked <=> root.bar-show-clock;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "显示秒";
+                            description: "时钟显示为 时:分:秒";
+
+                            LumaSwitch {
+                                checked <=> root.bar-clock-seconds;
+                                enabled: root.bar-show-clock;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "日期";
+                            description: "显示 月-日 与星期";
+
+                            LumaSwitch {
+                                checked <=> root.bar-show-date;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "电池";
+                            description: "显示电池百分比与充电状态";
+
+                            LumaSwitch {
+                                checked <=> root.bar-show-battery;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "自定义文本";
+                            description: "最多 48 个字符，显示在工具栏中";
+                            last: true;
+
+                            Rectangle {
+                                width: 220px;
+                                height: 28px;
+                                border-radius: 7px;
+                                background: Palette.field-bg;
+                                border-width: 1px;
+                                border-color: custom-input.has-focus ? Palette.accent : Palette.field-border;
+                                animate border-color { duration: 120ms; easing: ease-out; }
+
+                                custom-input := TextInput {
+                                    x: 8px;
+                                    y: 3px;
+                                    width: parent.width - 16px;
+                                    height: parent.height - 6px;
+                                    text <=> root.bar-custom-text;
+                                    single-line: true;
+                                    font-family: "Segoe UI Variable Display";
+                                    font-size: 12px;
+                                    color: Palette.text-primary;
+                                    selection-background-color: Palette.accent-ring;
+                                    selection-foreground-color: Palette.text-primary;
+                                    edited => { root.changed(); }
+                                }
+
+                                if root.bar-custom-text == "" && !custom-input.has-focus : Text {
+                                    x: 9px;
+                                    y: 0;
+                                    width: parent.width - 18px;
+                                    height: parent.height;
+                                    text: "例如：书房 · 23°C";
+                                    color: Palette.text-tertiary;
+                                    font-size: 12px;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 内容
+            VerticalLayout {
+                spacing: 8px;
+
+                Text {
+                    text: "内容";
+                    color: Palette.text-secondary;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Rectangle {
+                    border-radius: 10px;
+                    background: Palette.card-bg;
+                    border-width: 1px;
+                    border-color: Palette.card-border;
+                    clip: true;
+
+                    VerticalLayout {
+                        spacing: 0;
+
+                        SettingsRow {
+                            title: "品牌";
+                            description: "应用图标与 Luma 名称";
+
+                            LumaSwitch {
+                                checked <=> root.bar-show-brand;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "设备名称";
+                            description: "每台打印机的显示名称";
+
+                            LumaSwitch {
+                                checked <=> root.bar-show-name;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "状态";
+                            description: "打印中 / 空闲 / 离线等";
+
+                            LumaSwitch {
+                                checked <=> root.bar-show-status;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "进度百分比";
+                            description: "例如 64%";
+
+                            LumaSwitch {
+                                checked <=> root.bar-show-progress;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "剩余时间";
+                            description: "例如 2h16m";
+
+                            LumaSwitch {
+                                checked <=> root.bar-show-remaining;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "进度线";
+                            description: "每台打印机下方 2px 进度条";
+
+                            LumaSwitch {
+                                checked <=> root.bar-show-progress-bar;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "智能排序";
+                            description: "异常、暂停、打印中优先";
+
+                            LumaSwitch {
+                                checked <=> root.bar-smart-sort;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "最多显示";
+                            description: "超出数量以 +N 表示";
+                            last: true;
+
+                            Rectangle {
+                                width: 240px;
+                                height: 28px;
+                                border-radius: 7px;
+                                background: Palette.segmented-track;
+
+                                HorizontalLayout {
+                                    padding: 3px;
+                                    spacing: 3px;
+                                    ChoiceChip { label: "1"; selected: root.bar-max-printers == 1; horizontal-stretch: 1; clicked => { root.bar-max-printers = 1; root.changed(); } }
+                                    ChoiceChip { label: "2"; selected: root.bar-max-printers == 2; horizontal-stretch: 1; clicked => { root.bar-max-printers = 2; root.changed(); } }
+                                    ChoiceChip { label: "3"; selected: root.bar-max-printers == 3; horizontal-stretch: 1; clicked => { root.bar-max-printers = 3; root.changed(); } }
+                                    ChoiceChip { label: "4"; selected: root.bar-max-printers == 4; horizontal-stretch: 1; clicked => { root.bar-max-printers = 4; root.changed(); } }
+                                    ChoiceChip { label: "5"; selected: root.bar-max-printers == 5; horizontal-stretch: 1; clicked => { root.bar-max-printers = 5; root.changed(); } }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 交互
+            VerticalLayout {
+                spacing: 8px;
+
+                Text {
+                    text: "交互";
+                    color: Palette.text-secondary;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Rectangle {
+                    border-radius: 10px;
+                    background: Palette.card-bg;
+                    border-width: 1px;
+                    border-color: Palette.card-border;
+                    clip: true;
+
+                    VerticalLayout {
+                        spacing: 0;
+
+                        SettingsRow {
+                            title: "鼠标穿透";
+                            description: "点击会落到状态条下方的窗口；设置请从托盘菜单进入";
+
+                            Text {
+                                text: "始终开启";
+                                color: Palette.text-secondary;
+                                font-size: 12px;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "悬停时隐藏";
+                            description: "鼠标滑过状态条时淡出，离开后恢复";
+
+                            LumaSwitch {
+                                checked <=> root.bar-hide-hover;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "全屏时隐藏";
+                            description: "前台窗口全屏或最大化时自动收起";
+                            last: true;
+
+                            LumaSwitch {
+                                checked <=> root.bar-hide-fullscreen;
+                                toggled => { root.changed(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 关于
+            VerticalLayout {
+                spacing: 8px;
+
+                Text {
+                    text: "关于";
+                    color: Palette.text-secondary;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Rectangle {
+                    border-radius: 10px;
+                    background: Palette.card-bg;
+                    border-width: 1px;
+                    border-color: Palette.card-border;
+                    clip: true;
+
+                    VerticalLayout {
+                        spacing: 0;
+
+                        SettingsRow {
+                            title: "版本";
+                            description: "Luma Desktop · GPL-3.0-only";
+                            Text {
+                                text: "v" + root.app-version;
+                                color: Palette.text-secondary;
+                                font-size: 12px;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        SettingsRow {
+                            title: "恢复默认";
+                            description: "状态条位置、大小、外观与内容";
+                            last: true;
+                            TextLink {
+                                width: 56px;
+                                label: "恢复";
+                                clicked => {
+                                    root.bar-monitor = 0;
+                                    root.bar-dock = 0;
+                                    root.bar-align = 1;
+                                    root.bar-auto-width = true;
+                                    root.bar-width = 760px;
+                                    root.bar-height = 40px;
+                                    root.bar-radius = 10px;
+                                    root.bar-opacity = 0.85;
+                                    root.bar-offset = 0px;
+                                    root.bar-scale = 1.0;
+                                    root.bar-show-brand = true;
+                                    root.bar-show-name = true;
+                                    root.bar-show-status = true;
+                                    root.bar-show-progress = true;
+                                    root.bar-show-remaining = true;
+                                    root.bar-show-progress-bar = true;
+                                    root.bar-show-clock = true;
+                                    root.bar-clock-seconds = false;
+                                    root.bar-show-date = false;
+                                    root.bar-show-battery = false;
+                                    root.bar-custom-text = "";
+                                    root.bar-smart-sort = true;
+                                    root.bar-max-printers = 3;
+                                    root.bar-hide-hover = true;
+                                    root.bar-hide-fullscreen = false;
+                                    root.bar-visible = true;
+                                    root.changed();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+export component AppWindow inherits Window {
+    title: "Luma";
+    width: 1120px;
+    height: 720px;
+    icon: @image-url("../assets/app-icon.png");
+    background: Palette.window-bg;
+    default-font-family: "Segoe UI Variable Display";
+    default-font-size: 13px;
+
+    in-out property <bool> dark-mode <=> Palette.dark;
+    in property <string> app-version: "0.1.1";
+    in property <bool> demo-mode: true;
+    in property <string> cloud-status: "演示模式";
+    in property <int> cloud-state: 0;
+    in property <bool> logged-in: false;
+    in property <string> account-summary: "未登录";
+    in property <string> account-url: "";
+    // 打印机内置摄像头：帧由后台线程解码后推送，UI 只负责显示。
+    in property <image> camera-frame;
+    in property <bool> camera-live: false;
+    in property <string> camera-status: "摄像头未连接";
+    in-out property <bool> bar-visible: false;
+    in-out property <int> bar-monitor: 0;
+    in-out property <int> bar-dock: 0;
+    in-out property <int> bar-align: 1;
+    in-out property <bool> bar-auto-width: true;
+    in-out property <length> bar-width: 760px;
+    in-out property <length> bar-height: 40px;
+    in-out property <length> bar-radius: 10px;
+    in-out property <float> bar-opacity: 0.85;
+    in-out property <length> bar-offset: 0px;
+    in-out property <float> bar-scale: 1.0;
+    in-out property <bool> bar-show-brand: true;
+    in-out property <bool> bar-show-name: true;
+    in-out property <bool> bar-show-status: true;
+    in-out property <bool> bar-show-progress: true;
+    in-out property <bool> bar-show-remaining: true;
+    in-out property <bool> bar-show-progress-bar: true;
+    in-out property <bool> bar-show-clock: true;
+    in-out property <bool> bar-clock-seconds: false;
+    in-out property <bool> bar-show-date: false;
+    in-out property <bool> bar-show-battery: false;
+    in-out property <string> bar-custom-text: "";
+    in-out property <bool> bar-smart-sort: true;
+    in-out property <int> bar-max-printers: 3;
+    in-out property <bool> bar-hide-hover: true;
+    in-out property <bool> bar-hide-fullscreen: false;
+    in-out property <int> page: 0;
+    in property <[ArcDot]> arc-dots: [];
+    in property <[float]> nozzle-history: [];
+    in property <[float]> bed-history: [];
+    in property <[float]> progress-history: [];
+    in property <[PrinterItem]> printers: [
+        {
+            name: "Luma",
+            model: "",
+            serial: "",
+            status: "未连接",
+            status-kind: 3,
+            progress: 0,
+            progress-text: "—",
+            progress-known: false,
+            task: "尚未连接打印机",
+            remaining: "",
+            nozzle: "—",
+            nozzle-target: "—",
+            nozzle-value: 0,
+            bed: "—",
+            bed-target: "—",
+            bed-value: 0,
+            layers: "—",
+            layer-card: "—",
+            layer-current: 0,
+            layer-total: 0,
+            layer-progress: 0,
+        },
+    ];
+    in-out property <int> selected: 0;
+    property <PrinterItem> current: root.printers[root.selected];
+
+    callback toggle-theme();
+    callback select-printer(int);
+    callback add-printer();
+    callback open-account();
+    callback apply-bar-settings();
+    callback toggle-camera();
+
+    HorizontalLayout {
+        // Sidebar — 系统设置左侧浅灰栏。
+        Rectangle {
+            width: 232px;
+            background: Palette.sidebar-bg;
+            animate background { duration: 180ms; easing: ease-out; }
+
+            VerticalLayout {
+                padding-left: 8px;
+                padding-right: 8px;
+                padding-top: 16px;
+                padding-bottom: 8px;
+                spacing: 0;
+
+                HorizontalLayout {
+                    height: 32px;
+                    padding-left: 8px;
+                    spacing: 8px;
+                    cross-axis-alignment: center;
+
+                    Text {
+                        text: "Luma";
+                        color: Palette.text-primary;
+                        font-size: 15px;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                }
+
+                Rectangle {
+                    height: 20px;
+                    background: transparent;
+                }
+
+                HorizontalLayout {
+                    height: 14px;
+                    padding-left: 8px;
+
+                    Text {
+                        text: "打印机";
+                        color: Palette.text-secondary;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                    }
+                }
+
+                Rectangle {
+                    height: 8px;
+                    background: transparent;
+                }
+
+                VerticalLayout {
+                    spacing: 4px;
+
+                    for item[i] in root.printers : PrinterRow {
+                        item: item;
+                        selected: i == root.selected;
+                        clicked => {
+                            root.page = 0;
+                            root.select-printer(i);
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 4px;
+                    background: transparent;
+                }
+
+                Rectangle {
+                    height: 44px;
+                    border-radius: 8px;
+                    background: root.page == 2
+                        ? Palette.selection-bg
+                        : (monitor-hover.has-hover ? Palette.hover-bg : transparent);
+                    animate background { duration: 120ms; easing: ease-out; }
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 8px;
+                        cross-axis-alignment: center;
+
+                        Rectangle {
+                            width: 16px;
+                            height: 16px;
+                            background: transparent;
+
+                            Rectangle {
+                                x: 1px;
+                                y: 6px;
+                                width: 3px;
+                                height: 6px;
+                                border-radius: 1px;
+                                background: Palette.accent;
+                            }
+                            Rectangle {
+                                x: 6px;
+                                y: 3px;
+                                width: 3px;
+                                height: 12px;
+                                border-radius: 1px;
+                                background: Palette.accent;
+                            }
+                            Rectangle {
+                                x: 11px;
+                                y: 7px;
+                                width: 3px;
+                                height: 8px;
+                                border-radius: 1px;
+                                background: Palette.accent;
+                            }
+                        }
+
+                        Text {
+                            text: "实时监控";
+                            color: Palette.text-primary;
+                            font-size: 13px;
+                            font-weight: 600;
+                            horizontal-stretch: 1;
+                            vertical-alignment: center;
+                        }
+
+                        Dot {
+                            size: 6px;
+                            tone: (root.demo-mode || root.cloud-state == 2)
+                                && root.current.status-kind != 3
+                                ? Palette.success
+                                : Palette.neutral;
+                        }
+
+                        Text {
+                            text: "›";
+                            color: Palette.text-tertiary;
+                            font-size: 13px;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    monitor-hover := TouchArea {
+                        clicked => {
+                            root.page = 2;
+                        }
+                    }
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: transparent;
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: Palette.separator;
+                }
+
+                Rectangle {
+                    height: 4px;
+                    background: transparent;
+                }
+
+                Rectangle {
+                    height: 44px;
+                    border-radius: 8px;
+                    background: settings-hover.has-hover ? Palette.hover-bg : transparent;
+                    animate background { duration: 120ms; easing: ease-out; }
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 8px;
+                        cross-axis-alignment: center;
+
+                        Text {
+                            text: "设置";
+                            color: Palette.text-primary;
+                            font-size: 13px;
+                            horizontal-stretch: 1;
+                            vertical-alignment: center;
+                        }
+
+                        Text {
+                            text: "›";
+                            color: Palette.text-tertiary;
+                            font-size: 13px;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    settings-hover := TouchArea {
+                        clicked => {
+                            root.page = 1;
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 4px;
+                    background: transparent;
+                }
+
+                Rectangle {
+                    height: 44px;
+                    border-radius: 8px;
+                    background: account-hover.has-hover ? Palette.hover-bg : transparent;
+                    animate background { duration: 120ms; easing: ease-out; }
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 8px;
+                        cross-axis-alignment: center;
+
+                        Rectangle {
+                            width: 16px;
+                            height: 16px;
+                            background: transparent;
+
+                            Rectangle {
+                                x: 5px;
+                                y: 1px;
+                                width: 6px;
+                                height: 6px;
+                                border-radius: 3px;
+                                background: Palette.text-tertiary;
+                            }
+                            Rectangle {
+                                x: 2px;
+                                y: 9px;
+                                width: 12px;
+                                height: 6px;
+                                border-radius: 3px;
+                                background: Palette.text-tertiary;
+                            }
+                        }
+
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            spacing: 1px;
+
+                            Text {
+                                text: root.logged-in ? "Bambu 账号" : "登录 / 账户";
+                                color: Palette.text-primary;
+                                font-size: 13px;
+                                overflow: elide;
+                            }
+                            Text {
+                                text: root.logged-in ? root.account-summary : "未登录";
+                                color: root.logged-in
+                                    ? (account-hover.has-hover ? Palette.accent-hover : Palette.accent)
+                                    : Palette.text-tertiary;
+                                animate color { duration: 120ms; easing: ease-out; }
+                                font-size: 11px;
+                                font-weight: root.logged-in ? 500 : 400;
+                                overflow: elide;
+                            }
+                        }
+
+                        if root.logged-in : Dot {
+                            size: 6px;
+                            tone: Palette.success;
+                        }
+
+                        Text {
+                            text: root.logged-in ? "↗" : "›";
+                            color: root.logged-in
+                                ? (account-hover.has-hover ? Palette.accent-hover : Palette.accent)
+                                : Palette.text-tertiary;
+                            animate color { duration: 120ms; easing: ease-out; }
+                            font-size: 13px;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    account-hover := TouchArea {
+                        width: parent.width;
+                        height: parent.height;
+                        clicked => {
+                            root.open-account();
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            width: 1px;
+            background: Palette.separator;
+        }
+
+        // Main column
+        Rectangle {
+            horizontal-stretch: 1;
+            background: Palette.content-bg;
+            animate background { duration: 180ms; easing: ease-out; }
+
+            VerticalLayout {
+                // 52px toolbar
+                Rectangle {
+                    height: 52px;
+                    background: Palette.window-bg;
+                    animate background { duration: 180ms; easing: ease-out; }
+
+                    HorizontalLayout {
+                        padding-left: 24px;
+                        padding-right: 24px;
+                        spacing: 8px;
+                        cross-axis-alignment: center;
+
+                        Text {
+                            text: root.page == 0 ? "打印机" : (root.page == 1 ? "设置" : "实时监控");
+                            color: Palette.text-primary;
+                            font-size: 13px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            background: transparent;
+                        }
+
+                        if root.demo-mode : HorizontalLayout {
+                            spacing: 6px;
+                            cross-axis-alignment: center;
+
+                            Text {
+                                text: "演示数据";
+                                color: Palette.text-tertiary;
+                                font-size: 11px;
+                                vertical-alignment: center;
+                            }
+                            Dot {
+                                size: 6px;
+                                tone: Palette.warning;
+                            }
+                        }
+
+                        OutlineButton {
+                            width: 56px;
+                            label: root.dark-mode ? "浅色" : "深色";
+                            clicked => {
+                                root.toggle-theme();
+                            }
+                        }
+
+                        OutlineButton {
+                            width: 104px;
+                            label: "+ 添加打印机";
+                            visible: root.page == 0;
+                            clicked => {
+                                root.add-printer();
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        y: parent.height - 1px;
+                        width: parent.width;
+                        height: 1px;
+                        background: Palette.separator;
+                    }
+                }
+
+                // Content — 白底 / 系统设置分组列表。
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: Palette.content-bg;
+                    clip: true;
+
+                    SettingsPage {
+                        x: 0;
+                        y: 0;
+                        width: parent.width;
+                        height: parent.height;
+                        app-version: root.app-version;
+                        visible: root.page == 1;
+                        bar-visible <=> root.bar-visible;
+                        bar-monitor <=> root.bar-monitor;
+                        bar-dock <=> root.bar-dock;
+                        bar-align <=> root.bar-align;
+                        bar-auto-width <=> root.bar-auto-width;
+                        bar-width <=> root.bar-width;
+                        bar-height <=> root.bar-height;
+                        bar-radius <=> root.bar-radius;
+                        bar-opacity <=> root.bar-opacity;
+                        bar-offset <=> root.bar-offset;
+                        bar-scale <=> root.bar-scale;
+                        bar-show-brand <=> root.bar-show-brand;
+                        bar-show-name <=> root.bar-show-name;
+                        bar-show-status <=> root.bar-show-status;
+                        bar-show-progress <=> root.bar-show-progress;
+                        bar-show-remaining <=> root.bar-show-remaining;
+                        bar-show-progress-bar <=> root.bar-show-progress-bar;
+                        bar-show-clock <=> root.bar-show-clock;
+                        bar-clock-seconds <=> root.bar-clock-seconds;
+                        bar-show-date <=> root.bar-show-date;
+                        bar-show-battery <=> root.bar-show-battery;
+                        bar-custom-text <=> root.bar-custom-text;
+                        bar-smart-sort <=> root.bar-smart-sort;
+                        bar-max-printers <=> root.bar-max-printers;
+                        bar-hide-hover <=> root.bar-hide-hover;
+                        bar-hide-fullscreen <=> root.bar-hide-fullscreen;
+                        dark-mode <=> root.dark-mode;
+                        theme-toggle => {
+                            root.toggle-theme();
+                        }
+                        changed => {
+                            root.apply-bar-settings();
+                        }
+                    }
+
+                    // 实时监控：MQTT 已投影的状态 + 打印机内置摄像头。
+                    ScrollView {
+                        visible: root.page == 2;
+                        x: 0;
+                        y: 0;
+                        width: parent.width;
+                        height: parent.height;
+
+                    VerticalLayout {
+                        width: parent.width;
+                        padding: 24px;
+                        spacing: 16px;
+
+                        HorizontalLayout {
+                            height: 48px;
+                            spacing: 12px;
+                            cross-axis-alignment: center;
+
+                            VerticalLayout {
+                                spacing: 3px;
+
+                                Text {
+                                    text: root.current.name;
+                                    color: Palette.text-primary;
+                                    font-size: 22px;
+                                    font-weight: 600;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    text: root.current.model + " · " + root.current.status;
+                                    color: Palette.text-secondary;
+                                    font-size: 12px;
+                                    overflow: elide;
+                                }
+                            }
+
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                background: transparent;
+                            }
+
+                            HorizontalLayout {
+                                spacing: 6px;
+                                cross-axis-alignment: center;
+
+                                Dot {
+                                    size: 7px;
+                                    tone: root.cloud-state == 2 ? Palette.success : Palette.warning;
+                                }
+                                Text {
+                                    text: root.cloud-state == 2 ? "实时" : root.cloud-status;
+                                    color: Palette.text-secondary;
+                                    font-size: 12px;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        // 打印机内置摄像头：整行卡片，画面按比例留黑边。
+                        Rectangle {
+                            // 16:9 画面在 840px 宽的内容区里用 360px 高，
+                            // 既不会出现大块左右黑边，也能在 720px 窗口内完整放下。
+                            height: 360px;
+                            border-radius: 10px;
+                            background: #0a0c0f;
+                            border-width: 1px;
+                            border-color: Palette.card-border;
+                            clip: true;
+
+                            Image {
+                                width: parent.width;
+                                height: parent.height;
+                                source: root.camera-frame;
+                                image-fit: contain;
+                                opacity: root.camera-live ? 1.0 : 0.0;
+                                animate opacity { duration: 220ms; easing: ease-out; }
+                            }
+
+                            if !root.camera-live : VerticalLayout {
+                                width: parent.width;
+                                height: parent.height;
+                                alignment: center;
+                                spacing: 6px;
+
+                                Text {
+                                    text: root.camera-status;
+                                    color: #8b94a3;
+                                    font-size: 12px;
+                                    horizontal-alignment: center;
+                                }
+                                Text {
+                                    text: "点击右上角「开启」显示机内摄像头画面";
+                                    color: #5d6675;
+                                    font-size: 11px;
+                                    horizontal-alignment: center;
+                                }
+                            }
+
+                            if root.camera-live : Rectangle {
+                                x: 12px;
+                                y: 12px;
+                                width: 54px;
+                                height: 22px;
+                                border-radius: 11px;
+                                background: #000000a0;
+
+                                HorizontalLayout {
+                                    padding-left: 8px;
+                                    padding-right: 8px;
+                                    spacing: 6px;
+                                    cross-axis-alignment: center;
+
+                                    Rectangle {
+                                        width: 6px;
+                                        height: 6px;
+                                        border-radius: 3px;
+                                        background: #ff4d4f;
+                                    }
+                                    Text {
+                                        text: "LIVE";
+                                        color: #ffffff;
+                                        font-size: 10px;
+                                        font-weight: 600;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                x: parent.width - self.width - 12px;
+                                y: 12px;
+                                width: 58px;
+                                height: 24px;
+                                border-radius: 12px;
+                                background: camera-toggle.has-hover ? #ffffff33 : #ffffff1f;
+                                animate background { duration: 140ms; easing: ease-out; }
+
+                                Text {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    text: root.camera-live ? "暂停" : "开启";
+                                    color: #ffffff;
+                                    font-size: 11px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+
+                                camera-toggle := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { root.toggle-camera(); }
+                                }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 12px;
+
+                            Rectangle {
+                                width: 300px;
+                                height: 150px;
+                                border-radius: 10px;
+                                background: Palette.card-bg;
+                                border-width: 1px;
+                                border-color: Palette.card-border;
+
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+
+                                    Text {
+                                        text: "打印进度";
+                                        color: Palette.text-secondary;
+                                        font-size: 11px;
+                                    }
+                                    Text {
+                                        text: root.current.progress-text;
+                                        color: Palette.text-primary;
+                                        font-size: 34px;
+                                        font-weight: 600;
+                                    }
+                                    Rectangle {
+                                        height: 6px;
+                                        border-radius: 3px;
+                                        background: Palette.track;
+
+                                        Rectangle {
+                                            width: parent.width * Math.min(1, Math.max(0, root.current.progress / 100));
+                                            height: parent.height;
+                                            border-radius: 3px;
+                                            background: Palette.accent;
+                                            animate width { duration: 300ms; easing: ease-out; }
+                                        }
+                                    }
+                                    Text {
+                                        text: root.current.task;
+                                        color: Palette.text-tertiary;
+                                        font-size: 11px;
+                                        overflow: elide;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                height: 150px;
+                                border-radius: 10px;
+                                background: Palette.card-bg;
+                                border-width: 1px;
+                                border-color: Palette.card-border;
+
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 4px;
+
+                                    Text {
+                                        text: "喷嘴温度";
+                                        color: Palette.text-secondary;
+                                        font-size: 11px;
+                                    }
+                                    Text {
+                                        text: root.current.nozzle;
+                                        color: Palette.text-primary;
+                                        font-size: 28px;
+                                        font-weight: 600;
+                                    }
+                                    Text {
+                                        text: "目标 " + root.current.nozzle-target;
+                                        color: Palette.text-tertiary;
+                                        font-size: 11px;
+                                    }
+                                    Rectangle {
+                                        vertical-stretch: 1;
+                                        background: transparent;
+                                    }
+                                    Sparkline {
+                                        height: 28px;
+                                        values: root.nozzle-history;
+                                        maximum: 300;
+                                        tone: Palette.warning;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                height: 150px;
+                                border-radius: 10px;
+                                background: Palette.card-bg;
+                                border-width: 1px;
+                                border-color: Palette.card-border;
+
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 4px;
+
+                                    Text {
+                                        text: "热床温度";
+                                        color: Palette.text-secondary;
+                                        font-size: 11px;
+                                    }
+                                    Text {
+                                        text: root.current.bed;
+                                        color: Palette.text-primary;
+                                        font-size: 28px;
+                                        font-weight: 600;
+                                    }
+                                    Text {
+                                        text: "目标 " + root.current.bed-target;
+                                        color: Palette.text-tertiary;
+                                        font-size: 11px;
+                                    }
+                                    Rectangle {
+                                        vertical-stretch: 1;
+                                        background: transparent;
+                                    }
+                                    Sparkline {
+                                        height: 28px;
+                                        values: root.bed-history;
+                                        maximum: 150;
+                                        tone: Palette.success;
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 12px;
+                            vertical-stretch: 1;
+
+                            Rectangle {
+                                horizontal-stretch: 2;
+                                border-radius: 10px;
+                                background: Palette.card-bg;
+                                border-width: 1px;
+                                border-color: Palette.card-border;
+
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+
+                                    HorizontalLayout {
+                                        cross-axis-alignment: center;
+                                        Text {
+                                            text: "喷嘴温度趋势";
+                                            color: Palette.text-primary;
+                                            font-size: 13px;
+                                            font-weight: 600;
+                                            horizontal-stretch: 1;
+                                        }
+                                        Text {
+                                            text: root.current.nozzle;
+                                            color: Palette.text-secondary;
+                                            font-size: 12px;
+                                        }
+                                    }
+                                    Sparkline {
+                                        vertical-stretch: 1;
+                                        min-height: 60px;
+                                        values: root.nozzle-history;
+                                        maximum: 300;
+                                        tone: Palette.warning;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                horizontal-stretch: 2;
+                                border-radius: 10px;
+                                background: Palette.card-bg;
+                                border-width: 1px;
+                                border-color: Palette.card-border;
+
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+
+                                    HorizontalLayout {
+                                        cross-axis-alignment: center;
+                                        Text {
+                                            text: "热床温度趋势";
+                                            color: Palette.text-primary;
+                                            font-size: 13px;
+                                            font-weight: 600;
+                                            horizontal-stretch: 1;
+                                        }
+                                        Text {
+                                            text: root.current.bed;
+                                            color: Palette.text-secondary;
+                                            font-size: 12px;
+                                        }
+                                    }
+                                    Sparkline {
+                                        vertical-stretch: 1;
+                                        min-height: 60px;
+                                        values: root.bed-history;
+                                        maximum: 150;
+                                        tone: Palette.success;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                border-radius: 10px;
+                                background: Palette.card-bg;
+                                border-width: 1px;
+                                border-color: Palette.card-border;
+
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+
+                                    Text {
+                                        text: "进度趋势";
+                                        color: Palette.text-primary;
+                                        font-size: 13px;
+                                        font-weight: 600;
+                                    }
+                                    Sparkline {
+                                        vertical-stretch: 1;
+                                        min-height: 60px;
+                                        values: root.progress-history;
+                                        maximum: 100;
+                                        tone: Palette.accent;
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 12px;
+                            height: 72px;
+
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                border-radius: 10px;
+                                background: Palette.card-bg;
+                                border-width: 1px;
+                                border-color: Palette.card-border;
+                                HorizontalLayout {
+                                    padding-left: 16px;
+                                    padding-right: 16px;
+                                    cross-axis-alignment: center;
+                                    Text { text: "层数"; color: Palette.text-secondary; font-size: 12px; }
+                                    Text { text: root.current.layers; color: Palette.text-primary; font-size: 16px; font-weight: 600; horizontal-stretch: 1; horizontal-alignment: right; }
+                                }
+                            }
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                border-radius: 10px;
+                                background: Palette.card-bg;
+                                border-width: 1px;
+                                border-color: Palette.card-border;
+                                HorizontalLayout {
+                                    padding-left: 16px;
+                                    padding-right: 16px;
+                                    cross-axis-alignment: center;
+                                    Text { text: "剩余"; color: Palette.text-secondary; font-size: 12px; }
+                                    Text { text: root.current.remaining; color: Palette.text-primary; font-size: 13px; font-weight: 500; horizontal-stretch: 1; horizontal-alignment: right; overflow: elide; }
+                                }
+                            }
+                        }
+                    }
+                    }
+
+                    VerticalLayout {
+                        visible: root.page == 0;
+                        padding: 24px;
+                        spacing: 24px;
+
+                        // 1. Current print hero: 无卡片边框，只有留白和底部细线。
+                        Rectangle {
+                            height: 200px;
+                            background: transparent;
+
+                            VerticalLayout {
+                                spacing: 0;
+
+                                HorizontalLayout {
+                                    vertical-stretch: 1;
+                                    spacing: 24px;
+                                    cross-axis-alignment: center;
+
+                                    Rectangle {
+                                        width: 160px;
+                                        height: 160px;
+                                        background: transparent;
+
+                                        Ring {
+                                            width: parent.width;
+                                            height: parent.height;
+                                            progress: root.current.progress;
+                                            known: root.current.progress-known;
+                                            dots: root.arc-dots;
+                                            tone: Palette.accent;
+                                        }
+
+                                        VerticalLayout {
+                                            width: parent.width;
+                                            height: parent.height;
+                                            alignment: center;
+                                            spacing: 2px;
+
+                                            HorizontalLayout {
+                                                alignment: center;
+                                                cross-axis-alignment: end;
+                                                spacing: 1px;
+
+                                                Text {
+                                                    text: root.current.progress-known
+                                                        ? "\{Math.round(root.current.progress)}"
+                                                        : "—";
+                                                    color: Palette.text-primary;
+                                                    font-size: 34px;
+                                                    font-weight: 600;
+                                                }
+
+                                                if root.current.progress-known : VerticalLayout {
+                                                    height: 34px;
+                                                    alignment: end;
+
+                                                    Text {
+                                                        text: "%";
+                                                        color: Palette.text-tertiary;
+                                                        font-size: 13px;
+                                                    }
+                                                }
+                                            }
+
+                                            Text {
+                                                text: "整体进度";
+                                                color: Palette.text-tertiary;
+                                                font-size: 11px;
+                                                horizontal-alignment: center;
+                                            }
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        horizontal-stretch: 1;
+                                        spacing: 8px;
+
+                                        Text {
+                                            text: root.current.task;
+                                            color: Palette.text-primary;
+                                            font-size: 17px;
+                                            font-weight: 600;
+                                            overflow: elide;
+                                        }
+
+                                        HorizontalLayout {
+                                            spacing: 8px;
+                                            cross-axis-alignment: center;
+
+                                            StatusPill {
+                                                label: root.current.status;
+                                                kind: root.current.status-kind;
+                                            }
+
+                                            Text {
+                                                text: root.current.remaining;
+                                                color: Palette.text-secondary;
+                                                font-size: 13px;
+                                                vertical-alignment: center;
+                                                horizontal-stretch: 1;
+                                                overflow: elide;
+                                            }
+                                        }
+
+                                        Bar {
+                                            value: root.current.progress;
+                                            tone: Palette.accent;
+                                        }
+
+                                        HorizontalLayout {
+                                            cross-axis-alignment: center;
+
+                                            Text {
+                                                text: "层 " + root.current.layers;
+                                                color: Palette.text-tertiary;
+                                                font-size: 11px;
+                                                vertical-alignment: center;
+                                                horizontal-stretch: 1;
+                                            }
+                                            Text {
+                                                text: "层进度 \{Math.round(root.current.layer-progress)}%";
+                                                color: Palette.text-tertiary;
+                                                font-size: 11px;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        HorizontalLayout {
+                                            spacing: 6px;
+                                            cross-axis-alignment: center;
+
+                                            Dot {
+                                                size: 6px;
+                                                tone: root.cloud-state == 2
+                                                    ? Palette.success
+                                                    : (root.cloud-state == 3 ? Palette.danger : Palette.warning);
+                                            }
+                                            Text {
+                                                text: "云端 · " + root.cloud-status;
+                                                color: Palette.text-tertiary;
+                                                font-size: 11px;
+                                                vertical-alignment: center;
+                                                overflow: elide;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    height: 1px;
+                                    background: Palette.separator;
+                                }
+                            }
+                        }
+
+                        // 2. Inset grouped list — 三行参数。
+                        VerticalLayout {
+                            spacing: 8px;
+
+                            Text {
+                                text: "打印参数";
+                                color: Palette.text-primary;
+                                font-size: 17px;
+                                font-weight: 600;
+                            }
+
+                            Rectangle {
+                                background: Palette.card-bg;
+                                border-radius: 10px;
+                                border-width: 1px;
+                                border-color: Palette.card-border;
+                                clip: true;
+
+                                VerticalLayout {
+                                    spacing: 0;
+
+                                    StatCard {
+                                        label: "喷嘴温度";
+                                        value: root.current.nozzle;
+                                        hint: "目标 " + root.current.nozzle-target;
+                                    }
+                                    InsetDivider { }
+                                    StatCard {
+                                        label: "热床温度";
+                                        value: root.current.bed;
+                                        hint: "目标 " + root.current.bed-target;
+                                    }
+                                    InsetDivider { }
+                                    StatCard {
+                                        label: "层数";
+                                        value: root.current.layer-card;
+                                        hint: "当前 / 总计";
+                                    }
+                                }
+                            }
+                        }
+
+                        // 3. Activity list.
+                        VerticalLayout {
+                            spacing: 8px;
+
+                            Text {
+                                text: "活动";
+                                color: Palette.text-primary;
+                                font-size: 17px;
+                                font-weight: 600;
+                            }
+
+                            Rectangle {
+                                background: Palette.card-bg;
+                                border-radius: 10px;
+                                border-width: 1px;
+                                border-color: Palette.card-border;
+                                clip: true;
+
+                                VerticalLayout {
+                                    spacing: 0;
+
+                                    if root.demo-mode : VerticalLayout {
+                                        spacing: 0;
+
+                                        ActivityRow {
+                                            time: root.current.status-kind == 4 ? "完成" : "14:32";
+                                            message: root.current.status-kind == 4
+                                                ? "打印完成 " + root.current.task
+                                                : (root.current.status-kind == 0
+                                                    ? "空闲，等待任务"
+                                                    : "开始打印 " + root.current.task);
+                                            tone: root.current.status-kind == 4
+                                                ? Palette.success
+                                                : (root.current.status-kind == 0 ? Palette.neutral : Palette.accent);
+                                        }
+                                        InsetDivider { }
+                                        ActivityRow {
+                                            time: root.current.status-kind == 4 ? "总计" : (root.current.status-kind == 0 ? "现在" : "15:08");
+                                            message: root.current.status-kind == 4
+                                                ? "全部层完成"
+                                                : (root.current.status-kind == 0
+                                                    ? "喷嘴 " + root.current.nozzle + " · 热床 " + root.current.bed
+                                                    : "喷嘴温度稳定，打印继续");
+                                            tone: root.current.status-kind == 0 ? Palette.neutral : Palette.success;
+                                        }
+                                        InsetDivider { }
+                                        ActivityRow {
+                                            time: "现在";
+                                            message: "演示数据 · 未连接云端";
+                                            tone: Palette.neutral;
+                                        }
+                                    }
+
+                                    if !root.demo-mode : ActivityRow {
+                                        time: "";
+                                        message: root.cloud-state == 2 ? "云端已连接 · 暂无最近事件" : "连接后将显示最近事件";
+                                        tone: Palette.neutral;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export struct BarPrinter {
+    name: string,
+    detail: string,
+    status: string,
+    progress-text: string,
+    remaining: string,
+    progress: float,
+    progress-known: bool,
+    tone: int,
+}
+
+/// 屏幕边缘的常驻状态条：无边框、置顶、不进任务栏、不抢焦点。
+/// 位置与可见性由 Rust 侧调整（见 src/status_bar.rs）。
+export component StatusBarWindow inherits Window {
+    title: "Luma 状态条";
+    no-frame: true;
+    always-on-top: true;
+    width: root.window-width;
+    height: root.window-height;
+    background: Palette.bar-bg;
+    default-font-family: "Segoe UI Variable Display";
+    default-font-size: 11px;
+
+    in-out property <bool> dark-mode <=> Palette.dark;
+    in-out property <length> window-width: 560px;
+    in-out property <length> window-height: 34px;
+    in property <[BarPrinter]> printers: [];
+    in property <string> summary: "未连接";
+    in property <float> ui-scale: 1.0;
+    in property <length> corner-radius: 10px;
+    in property <int> overflow-count: 0;
+    in property <bool> show-brand: true;
+    in property <bool> show-name: true;
+    in property <bool> show-status: true;
+    in property <bool> show-progress: true;
+    in property <bool> show-remaining: true;
+    in property <bool> show-progress-bar: true;
+    in property <bool> show-clock: true;
+    in property <bool> show-date: false;
+    in property <bool> show-battery: false;
+    in property <string> clock-text: "";
+    in property <string> date-text: "";
+    in property <string> battery-text: "";
+    in property <int> battery-percent: -1;
+    in property <bool> battery-charging: false;
+    in property <string> custom-text: "";
+
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        clip: true;
+        border-radius: root.corner-radius;
+        border-width: 1px;
+        border-color: Palette.separator;
+        background: Palette.bar-bg;
+        animate background, border-color { duration: 180ms; easing: ease-out; }
+
+        HorizontalLayout {
+            width: parent.width;
+            height: parent.height;
+            padding-left: 12px * root.ui-scale;
+            padding-right: 12px * root.ui-scale;
+            spacing: 8px * root.ui-scale;
+            alignment: start;
+            cross-axis-alignment: center;
+
+            if root.show-brand : BrandMark {
+                width: 16px * root.ui-scale;
+                height: 16px * root.ui-scale;
+            }
+
+            if root.show-brand : Text {
+                text: "Luma";
+                color: Palette.text-secondary;
+                font-size: 11px * root.ui-scale;
+                font-weight: 600;
+                vertical-alignment: center;
+                animate color { duration: 180ms; easing: ease-out; }
+            }
+
+            if root.show-clock && root.clock-text != "" : Text {
+                text: root.clock-text;
+                color: Palette.text-secondary;
+                font-size: 11px * root.ui-scale;
+                font-weight: 500;
+                vertical-alignment: center;
+                animate color { duration: 180ms; easing: ease-out; }
+            }
+
+            if root.show-date && root.date-text != "" : Text {
+                text: root.date-text;
+                color: Palette.text-tertiary;
+                font-size: 11px * root.ui-scale;
+                vertical-alignment: center;
+                animate color { duration: 180ms; easing: ease-out; }
+            }
+
+            if root.show-battery && root.battery-text != "" : HorizontalLayout {
+                spacing: 4px * root.ui-scale;
+                cross-axis-alignment: center;
+
+                Rectangle {
+                    width: 18px * root.ui-scale;
+                    height: 10px * root.ui-scale;
+                    border-radius: 2px * root.ui-scale;
+                    border-width: 1px;
+                    border-color: root.battery-charging
+                        ? Palette.success
+                        : (root.battery-percent > 50 ? Palette.success
+                        : (root.battery-percent > 20 ? Palette.warning : Palette.danger));
+                    animate border-color { duration: 180ms; easing: ease-out; }
+
+                    Rectangle {
+                        x: 2px * root.ui-scale;
+                        y: 2px * root.ui-scale;
+                        width: (14px * root.ui-scale) * Math.min(1, Math.max(0, root.battery-percent / 100));
+                        height: 6px * root.ui-scale;
+                        border-radius: 1px * root.ui-scale;
+                        background: root.battery-charging
+                            ? Palette.success
+                            : (root.battery-percent > 50 ? Palette.success
+                            : (root.battery-percent > 20 ? Palette.warning : Palette.danger));
+                        animate width { duration: 300ms; easing: ease-out; }
+                        animate background { duration: 180ms; easing: ease-out; }
+                    }
+                }
+
+                Text {
+                    text: root.battery-text;
+                    color: Palette.text-secondary;
+                    font-size: 11px * root.ui-scale;
+                    vertical-alignment: center;
+                    animate color { duration: 180ms; easing: ease-out; }
+                }
+            }
+
+            if root.custom-text != "" : Text {
+                text: root.custom-text;
+                color: Palette.text-secondary;
+                font-size: 11px * root.ui-scale;
+                min-width: 0;
+                overflow: elide;
+                vertical-alignment: center;
+                animate color { duration: 180ms; easing: ease-out; }
+            }
+
+            if (root.show-brand
+                || (root.show-clock && root.clock-text != "")
+                || (root.show-date && root.date-text != "")
+                || (root.show-battery && root.battery-text != "")
+                || root.custom-text != "")
+                && root.printers.length > 0 : Rectangle {
+                width: 1px;
+                height: 14px * root.ui-scale;
+                background: Palette.separator;
+            }
+
+            if root.printers.length == 0 : Text {
+                text: root.summary;
+                color: Palette.text-tertiary;
+                font-size: 11px * root.ui-scale;
+                vertical-alignment: center;
+                animate color { duration: 180ms; easing: ease-out; }
+            }
+
+            for printer[i] in root.printers : VerticalLayout {
+                horizontal-stretch: 1;
+                min-width: 0;
+                spacing: 2px * root.ui-scale;
+                alignment: center;
+
+                HorizontalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 5px * root.ui-scale;
+                    min-width: 0;
+                    alignment: center;
+                    cross-axis-alignment: center;
+
+                    Dot {
+                        size: 6px * root.ui-scale;
+                        tone: printer.tone == 1 ? Palette.success
+                            : (printer.tone == 2 ? Palette.warning
+                            : (printer.tone == 3 ? Palette.danger : Palette.neutral));
+                    }
+                    if root.show-name : Text {
+                        text: printer.name;
+                        color: Palette.text-primary;
+                        font-size: 11px * root.ui-scale;
+                        min-width: 0;
+                        horizontal-stretch: 0;
+                        overflow: elide;
+                        vertical-alignment: center;
+                        animate color { duration: 180ms; easing: ease-out; }
+                    }
+                    if root.show-status && printer.status != "" : Text {
+                        text: printer.status;
+                        color: Palette.text-secondary;
+                        font-size: 11px * root.ui-scale;
+                        min-width: 0;
+                        overflow: elide;
+                        vertical-alignment: center;
+                        animate color { duration: 180ms; easing: ease-out; }
+                    }
+                    if root.show-progress && printer.progress-known && printer.progress-text != "" : Text {
+                        text: printer.progress-text;
+                        color: Palette.text-secondary;
+                        font-size: 11px * root.ui-scale;
+                        min-width: 0;
+                        overflow: elide;
+                        vertical-alignment: center;
+                        animate color { duration: 180ms; easing: ease-out; }
+                    }
+                    if root.show-remaining && printer.remaining != "" : Text {
+                        text: printer.remaining;
+                        color: Palette.text-tertiary;
+                        font-size: 11px * root.ui-scale;
+                        min-width: 0;
+                        overflow: elide;
+                        vertical-alignment: center;
+                        animate color { duration: 180ms; easing: ease-out; }
+                    }
+                }
+
+                if root.show-progress-bar && printer.progress-known : Rectangle {
+                    horizontal-stretch: 1;
+                    height: 2px * root.ui-scale;
+                    border-radius: 1px * root.ui-scale;
+                    background: Palette.separator;
+
+                    Rectangle {
+                        width: parent.width * Math.min(1, Math.max(0, printer.progress / 100));
+                        height: parent.height;
+                        border-radius: parent.height / 2;
+                        background: printer.tone == 1 ? Palette.success
+                            : (printer.tone == 2 ? Palette.warning
+                            : (printer.tone == 3 ? Palette.danger : Palette.neutral));
+                        animate width { duration: 320ms; easing: ease-out; }
+                        animate background { duration: 180ms; easing: ease-out; }
+                    }
+                }
+            }
+
+            if root.overflow-count > 0 : Text {
+                text: "+" + root.overflow-count;
+                color: Palette.text-tertiary;
+                font-size: 11px * root.ui-scale;
+                vertical-alignment: center;
+                animate color { duration: 180ms; easing: ease-out; }
+            }
+        }
+
+    }
+}

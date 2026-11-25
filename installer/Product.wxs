@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package
+      Name="Luma"
+      Manufacturer="Luma contributors"
+      Version="$(var.ProductVersion)"
+      UpgradeCode="{E0B39C30-4BAC-45D1-B4FF-50326FA90162}"
+      Language="2052"
+      Codepage="936"
+      Scope="perUserOrMachine"
+      Compressed="yes">
+
+    <SummaryInformation
+        Description="Luma Desktop $(var.ProductVersion)"
+        Manufacturer="Luma contributors" />
+
+    <MajorUpgrade
+        DowngradeErrorMessage="已安装更高版本的 Luma。请先在“设置 → 应用”中卸载旧版本。" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="LumaIcon" SourceFile="$(var.IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="LumaIcon" />
+
+    <!-- 升级/卸载前让正在运行的 Luma 自行退出，避免文件占用和重启提示。 -->
+    <CustomAction
+        Id="QuitLuma"
+        FileRef="LumaExe"
+        ExeCommand="--quit"
+        Execute="immediate"
+        Return="ignore" />
+<?if $(var.BundleCamera) = 0 ?>
+    <CustomAction
+        Id="ImportCameraRuntime"
+        FileRef="LumaExe"
+        ExeCommand="--import-camera-runtime"
+        Execute="immediate"
+        Return="ignore" />
+<?endif?>
+    <InstallExecuteSequence>
+      <Custom Action="QuitLuma" Before="InstallValidate" Condition="Installed" />
+<?if $(var.BundleCamera) = 0 ?>
+      <Custom Action="ImportCameraRuntime" After="InstallFinalize" Condition="NOT Installed" />
+<?endif?>
+    </InstallExecuteSequence>
+
+    <Feature Id="ProductFeature" Title="Luma" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="StartMenuComponent" />
+<?if $(var.BundleCamera) = 1 ?>
+      <ComponentGroupRef Id="CameraComponents" />
+      <ComponentRef Id="CameraFolderCleanup" />
+<?endif?>
+    </Feature>
+
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+  </Package>
+
+  <Fragment>
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsDirectory" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="Luma">
+          <Directory Id="CAMERAFOLDER" Name="camera" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Luma" />
+    </StandardDirectory>
+  </Fragment>
+
+  <Fragment>
+<?if $(var.BundleCamera) = 1 ?>
+    <ComponentGroup Id="CameraComponents" Directory="CAMERAFOLDER">
+      <Files Include="$(var.PayloadDir)\camera\*" />
+    </ComponentGroup>
+
+    <Component Id="CameraFolderCleanup" Directory="CAMERAFOLDER" Guid="{7D7545EB-6C4C-4134-BCF7-A2DDAE449D6B}">
+      <RemoveFolder Id="RemoveCameraFolder" On="uninstall" />
+      <RegistryValue
+          Root="HKCU"
+          Key="Software\Luma\Desktop"
+          Name="CameraFolder"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+    </Component>
+<?endif?>
+
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="MainExecutable" Guid="{F0D65475-EC16-43FA-A7ED-12FAF1D6933B}">
+        <File Id="LumaExe" Source="$(var.PayloadDir)\Luma.exe" KeyPath="yes">
+          <Shortcut
+              Id="StartMenuShortcut"
+              Directory="ApplicationProgramsFolder"
+              Name="Luma"
+              Description="Luma Desktop"
+              WorkingDirectory="INSTALLFOLDER"
+              Icon="LumaIcon"
+              Advertise="no" />
+        </File>
+      </Component>
+
+      <Component Id="LicenseFile" Guid="{663ACEAF-FE19-421C-A976-5C5BC977C024}">
+        <File Id="LicenseTxt" Source="$(var.PayloadDir)\LICENSE.txt" />
+      </Component>
+
+      <Component Id="ReadmeFile" Guid="{184C7B73-5FF8-44E1-9894-C6FF0B972223}">
+        <File Id="ReadmeTxt" Source="$(var.PayloadDir)\README.txt" />
+      </Component>
+
+      <Component Id="AppPaths" Guid="{876D93A3-1659-40A7-A0BB-A248F41DC9F1}">
+        <RegistryKey Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\Luma.exe">
+          <RegistryValue Type="string" Value="[INSTALLFOLDER]Luma.exe" KeyPath="yes" />
+          <RegistryValue Name="Path" Type="string" Value="[INSTALLFOLDER]" />
+        </RegistryKey>
+      </Component>
+    </ComponentGroup>
+
+    <Component
+        Id="StartMenuComponent"
+        Directory="ApplicationProgramsFolder"
+        Guid="{FAFAD1AC-BD51-4353-AE4C-7ED39B587B8E}">
+      <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue
+          Root="HKCU"
+          Key="Software\Luma\Desktop"
+          Name="StartMenu"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+    </Component>
+  </Fragment>
+</Wix>

@@ -1,0 +1,17 @@
+# 项目级 Cargo 配置：仅影响本仓库。
+# 原因：当前网络访问 crates.io 官方 sparse index 会长时间挂起。
+# 如不需要镜像，删除本文件即可恢复官方源。
+
+[source.crates-io]
+replace-with = "rsproxy-sparse"
+
+[source.rsproxy-sparse]
+registry = "sparse+https://rsproxy.cn/index/"
+
+[net]
+retry = 3
+
+# 安装包不附带 VC++ 运行库：静态链接 CRT，用户机器无需额外依赖。
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+

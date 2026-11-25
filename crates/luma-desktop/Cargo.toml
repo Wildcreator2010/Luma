@@ -1,0 +1,42 @@
+[package]
+name = "luma-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Luma Desktop (Slint)"
+
+[dependencies]
+luma-model = { path = "../luma-model" }
+luma-core = { path = "../luma-core" }
+luma-cloud = { path = "../luma-cloud" }
+luma-protocol = { path = "../luma-protocol" }
+slint = { workspace = true, features = ["raw-window-handle-06"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true }
+anyhow = "1"
+serde_json = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio-tungstenite = "0.30"
+futures-util = "0.3"
+raw-window-handle = "0.6"
+libloading = "0.8"
+uuid = { version = "1", features = ["v4"] }
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Networking_WinSock",
+    "Win32_Security",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_UI_Accessibility",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+slint-build = "1.19"
+embed-resource = "3"
+

@@ -1,0 +1,12 @@
+[package]
+name = "luma-model"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Shared Luma domain model (desktop + firmware)"
+
+[dependencies]
+serde = { workspace = true }
+

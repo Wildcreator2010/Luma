@@ -1,0 +1,12 @@
+/target
+/dist
+/firmware/**/target
+**/*.db
+**/*.db-shm
+**/*.db-wal
+/logs
+*.log
+.env
+*.local.toml
+/captures/
+

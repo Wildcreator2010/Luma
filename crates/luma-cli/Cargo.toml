@@ -1,0 +1,25 @@
+[package]
+name = "luma-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Luma CLI: login, device list, raw report capture"
+
+[[bin]]
+name = "luma"
+path = "src/main.rs"
+
+[dependencies]
+luma-cloud = { path = "../luma-cloud" }
+luma-core = { path = "../luma-core" }
+luma-model = { path = "../luma-model" }
+tokio = { workspace = true, features = ["signal"] }
+clap = { version = "4", features = ["derive"] }
+rpassword = "7"
+anyhow = "1"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde_json = { workspace = true }
+

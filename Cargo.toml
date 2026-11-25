@@ -1,0 +1,37 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/luma-model",
+    "crates/luma-protocol",
+    "crates/luma-core",
+    "crates/luma-cli",
+    "crates/luma-cloud",
+    "crates/luma-storage",
+    "crates/luma-desktop",
+]
+exclude = ["firmware"]
+
+[workspace.package]
+version = "0.1.1"
+edition = "2021"
+rust-version = "1.95"
+authors = ["Luma contributors"]
+license = "GPL-3.0-only"
+repository = "https://github.com/Wildcreator2010/Luma"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+slint = "1.19"
+rusqlite = { version = "0.43", features = ["bundled"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+

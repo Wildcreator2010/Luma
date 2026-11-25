@@ -1,0 +1,16 @@
+[package]
+name = "luma-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Luma domain logic: state aggregation, printer manager, provider traits"
+
+[dependencies]
+luma-model = { path = "../luma-model" }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+

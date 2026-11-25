@@ -1,0 +1,14 @@
+[package]
+name = "luma-storage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Luma local persistence (SQLite)"
+
+[dependencies]
+luma-model = { path = "../luma-model" }
+rusqlite = { workspace = true }
+thiserror = { workspace = true }
+

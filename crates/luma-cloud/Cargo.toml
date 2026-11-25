@@ -1,0 +1,25 @@
+[package]
+name = "luma-cloud"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Luma Bambu Cloud provider (CN region, live validation pending)"
+
+[dependencies]
+luma-model = { path = "../luma-model" }
+luma-core = { path = "../luma-core" }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rumqttc = { version = "0.25", features = ["use-rustls"] }
+keyring = "4"
+uuid = { version = "1", features = ["v4"] }
+base64 = "0.22"
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
+

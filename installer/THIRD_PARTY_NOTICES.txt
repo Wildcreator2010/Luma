@@ -1,0 +1,50 @@
+Luma full edition — third-party runtime notices
+================================================
+
+The "full" edition bundles runtime files copied from a locally installed
+Bambu Studio and from the Microsoft Visual C++ runtime so that the printer
+camera can work without a separate Bambu Studio installation.
+
+These files are not part of Luma and are not covered by Luma's GPL-3.0-only
+license. They remain subject to their own licenses:
+
+Bambu Studio / Bambu network plugin
+-----------------------------------
+- BambuSource.dll
+- live555.dll
+- libaosl.dll
+- bambu_networking.dll
+- agora_rtc_sdk.dll
+- libagora-ffmpeg.dll
+- libagora-soundtouch.dll
+
+Bambu Studio is licensed under AGPL-3.0. The Bambu networking plugin is
+distributed by Bambu Lab and may be non-free; see the Bambu Studio README:
+https://github.com/bambulab/BambuStudio
+
+FFmpeg
+------
+- avcodec-*.dll
+- avutil-*.dll
+- swscale-*.dll
+- swresample-*.dll
+
+These DLLs come from the Bambu Studio installation. FFmpeg licensing depends
+on the build configuration; see https://ffmpeg.org/legal.html.
+
+Microsoft Visual C++ runtime
+----------------------------
+- msvcp140*.dll
+- vcruntime140*.dll
+- concrt140.dll
+
+Redistribution is subject to the Microsoft Visual Studio license terms.
+
+Important
+---------
+Build and use the full edition only on a machine where you are entitled to
+use these components. Do not redistribute the full installer or portable ZIP
+unless you have verified that you have redistribution rights for every
+bundled binary.
+
+Luma itself remains GPL-3.0-only; see LICENSE.txt.

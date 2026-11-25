@@ -319,6 +319,37 @@ fn open_external_url(url: &str) {
     }
 }
 
+const BAMBU_STUDIO_DOWNLOAD_URL: &str = "https://bambulab.cn/zh-cn/download/studio";
+
+#[cfg(windows)]
+fn prompt_camera_setup() {
+    if !camera::should_prompt_setup() {
+        return;
+    }
+    camera::mark_setup_prompted();
+
+    use windows::core::HSTRING;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        MessageBoxW, IDYES, MB_ICONINFORMATION, MB_YESNO,
+    };
+
+    let text = "未检测到 Bambu Studio 摄像头组件。\n\n\
+                Luma 的实时画面需要官方 Bambu Studio 提供的 BambuSource / FFmpeg。\n\
+                是否现在打开 Bambu 官方下载页？\n\n\
+                安装完成后，可在 Luma「设置 → 摄像头运行库」点击“检测并导入”。";
+    let result = unsafe {
+        MessageBoxW(
+            None,
+            &HSTRING::from(text),
+            &HSTRING::from("Luma · 摄像头组件"),
+            MB_YESNO | MB_ICONINFORMATION,
+        )
+    };
+    if result == IDYES {
+        open_external_url(BAMBU_STUDIO_DOWNLOAD_URL);
+    }
+}
+
 const BAR_POLL_MS: u64 = 33;
 const BAR_FADE_STEP_MS: u64 = 16;
 const BAR_FADE_MS: f32 = 120.0;
@@ -597,6 +628,7 @@ fn run() -> Result<(), slint::PlatformError> {
 
     let ui = AppWindow::new()?;
     ui.set_app_version(env!("CARGO_PKG_VERSION").into());
+    ui.set_camera_runtime_status(camera::runtime_status().into());
 
     let args: Vec<String> = std::env::args().collect();
     let light = args.iter().any(|arg| arg == "--light");
@@ -641,6 +673,8 @@ fn run() -> Result<(), slint::PlatformError> {
     login.hide().ok();
     login.set_dark_mode(!light);
     login.set_app_version(env!("CARGO_PKG_VERSION").into());
+    #[cfg(windows)]
+    prompt_camera_setup();
 
     // 用户再次双击快捷方式时，把已有窗口拉到前台；没有 Token 时优先唤起登录窗。
     if let Some(single) = &single_instance {
@@ -818,6 +852,30 @@ fn run() -> Result<(), slint::PlatformError> {
                 ui.set_camera_live(false);
                 ui.set_camera_status("摄像头已关闭".into());
             }
+        }
+    });
+
+    ui.on_open_camera_download(move || open_external_url(BAMBU_STUDIO_DOWNLOAD_URL));
+
+    ui.on_import_camera_runtime({
+        let ui = ui.as_weak();
+        move || {
+            let Some(ui) = ui.upgrade() else {
+                return;
+            };
+            ui.set_camera_runtime_status("正在导入…".into());
+            let weak = ui.as_weak();
+            std::thread::spawn(move || {
+                let status = match camera::import_runtime() {
+                    Ok(_) => camera::runtime_status(),
+                    Err(error) => format!("导入失败：{error}"),
+                };
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = weak.upgrade() {
+                        ui.set_camera_runtime_status(status.into());
+                    }
+                });
+            });
         }
     });
 

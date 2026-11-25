@@ -18,6 +18,8 @@
 - 标准版安装包在安装结束时自动从本机 Bambu Studio 导入摄像头依赖到
   `%LOCALAPPDATA%\Luma\camera`（便携版可用 `--import-camera-runtime`），
   发布包本身不携带第三方二进制。
+- 首次启动未检测到 Bambu Studio 时提示打开官方下载页；设置页新增
+  “摄像头 → 运行库”，可一键检测并导入本机依赖。
 - Windows 安装包与便携版：`scripts/build-installer.ps1` 生成每用户 MSI 与便携 ZIP；
   安装到 `%LOCALAPPDATA%\Programs\Luma`，包含开始菜单快捷方式、App Paths、
   Major Upgrade 升级与卸载项。

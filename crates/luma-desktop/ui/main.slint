@@ -804,6 +804,7 @@ component SettingsRow inherits Rectangle {
 /// 主界面右侧的「设置」页，布局照 ClassIsland 的 SettingsExpander 分组卡片。
 component SettingsPage inherits Rectangle {
     in property <string> app-version: "0.1.1";
+    in property <string> camera-runtime-status: "未检测";
     in-out property <bool> bar-visible: false;
     in-out property <int> bar-monitor: 0;
     in-out property <int> bar-dock: 0;
@@ -834,6 +835,8 @@ component SettingsPage inherits Rectangle {
 
     callback changed();
     callback theme-toggle();
+    callback import-camera-runtime();
+    callback open-camera-download();
 
     background: Palette.content-bg;
     animate background { duration: 180ms; easing: ease-out; }
@@ -1459,6 +1462,56 @@ component SettingsPage inherits Rectangle {
                 }
             }
 
+            // 摄像头
+            VerticalLayout {
+                spacing: 8px;
+
+                Text {
+                    text: "摄像头";
+                    color: Palette.text-secondary;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Rectangle {
+                    border-radius: 10px;
+                    background: Palette.card-bg;
+                    border-width: 1px;
+                    border-color: Palette.card-border;
+                    clip: true;
+
+                    VerticalLayout {
+                        spacing: 0;
+
+                        SettingsRow {
+                            title: "运行库";
+                            description: root.camera-runtime-status;
+                            last: true;
+
+                            HorizontalLayout {
+                                spacing: 8px;
+
+                                TextLink {
+                                    width: 48px;
+                                    label: "下载";
+                                    clicked => {
+                                        root.open-camera-download();
+                                    }
+                                }
+
+                                TextLink {
+                                    width: 84px;
+                                    label: "检测并导入";
+                                    clicked => {
+                                        root.import-camera-runtime();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // 关于
             VerticalLayout {
                 spacing: 8px;
@@ -1556,6 +1609,7 @@ export component AppWindow inherits Window {
     in property <image> camera-frame;
     in property <bool> camera-live: false;
     in property <string> camera-status: "摄像头未连接";
+    in-out property <string> camera-runtime-status: "未检测";
     in-out property <bool> bar-visible: false;
     in-out property <int> bar-monitor: 0;
     in-out property <int> bar-dock: 0;
@@ -1621,6 +1675,8 @@ export component AppWindow inherits Window {
     callback open-account();
     callback apply-bar-settings();
     callback toggle-camera();
+    callback import-camera-runtime();
+    callback open-camera-download();
 
     HorizontalLayout {
         // Sidebar — 系统设置左侧浅灰栏。
@@ -2026,6 +2082,13 @@ export component AppWindow inherits Window {
                         bar-hide-hover <=> root.bar-hide-hover;
                         bar-hide-fullscreen <=> root.bar-hide-fullscreen;
                         dark-mode <=> root.dark-mode;
+                        camera-runtime-status: root.camera-runtime-status;
+                        import-camera-runtime => {
+                            root.import-camera-runtime();
+                        }
+                        open-camera-download => {
+                            root.open-camera-download();
+                        }
                         theme-toggle => {
                             root.toggle-theme();
                         }

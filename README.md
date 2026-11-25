@@ -34,8 +34,7 @@
   **尚未用真实账号 + 真实 X2D 验证**
 - 固件：未开始；ESP32-S3 可行性调研已完成（有条件可行）
 
-> 真实联调前，协议字段仍按公开社区资料实现；详细协议调研属于内部资料，
-> 不随公开仓库发布。
+> 真实联调前，协议字段仍按公开社区资料实现；`docs/PROTOCOL.md` 标注了可信度。
 
 ## 安装
 
@@ -73,6 +72,9 @@ msiexec /x .\dist\Luma-0.1.1-win64.msi /qn
 > 便携版可手动运行 `Luma.exe --import-camera-runtime`。未安装 Bambu Studio 时
 > 只影响实时画面，云端监控、状态条和托盘不受影响。
 >
+> 首次启动若未检测到 Bambu Studio，会提示打开官方下载页。安装完成后可在
+> “设置 → 摄像头 → 运行库”点击“检测并导入”，无需重新安装 Luma。
+>
 > 如需要“装好即用”的摄像头依赖，可在装有 Bambu Studio 的机器上本地构建全量版：
 >
 > ```powershell
@@ -106,7 +108,7 @@ Luma 用独立 profile 启动本机 Edge/Chrome，打开 Bambu 官方登录页�
 路径在 CN 站点要么被 Geetest 阻断，要么会返回无法区分的错误。
 
 > 端侧短信登录在 CN 不可用：`sendsmscode` 返回 `418` + Geetest，
-> 必须由浏览器完成。
+> 必须由浏览器完成。详见 `docs/BROWSER_LOGIN.md`。
 
 Token 存 Windows Credential Manager，登录成功后自动连接云端。
 也可以点“先看看演示”直接进入演示界面。
@@ -173,7 +175,7 @@ crates/
   luma-storage/    SQLite 持久化
   luma-desktop/    Slint 桌面端
 firmware/          ESP32-S3 固件（后续阶段，独立构建）
-docs/              架构、数据模型、状态条、安装与品牌
+docs/              架构、协议、数据模型、路线、风险、品牌
 ```
 
 ## 安全约定
@@ -192,11 +194,17 @@ Slint 同样以 GPLv3 方式使用，与本项目许可证兼容。
 ## 文档
 
 - [架构](docs/ARCHITECTURE.md)
+- [协议](docs/PROTOCOL.md)
 - [数据模型](docs/DATA_MODEL.md)
-- [状态条](docs/STATUS_BAR.md)
-- [品牌](docs/BRAND_IDENTITY.md)
+- [路线图](docs/ROADMAP.md)
+- [风险登记](docs/RISKS.md)
+- [Phase 0 报告](docs/PHASE0_REPORT.md)
+- [CN 云端协议调研](docs/research/CN_CLOUD_PROTOCOL.md)
+- [X2D 字段映射](docs/research/X2D_FIELD_MAP.md)
+- [Slint Windows 集成](docs/research/SLINT_WINDOWS_INTEGRATION.md)
+- [ESP32-S3 可行性](docs/research/ESP32_FEASIBILITY.md)
+- [UI 设计复审](docs/UI_REVIEW.md)
+- [Phase 1/2 实现报告](docs/PHASE1_REPORT.md)
+- [云端/运行时审计](docs/reviews/CLOUD_RUNTIME_REVIEW.md)
 - [安装与发布](docs/INSTALLER.md)
-
-协议调研、账号/Token 流程审计、风险/路线图、UI 迭代记录和整屏截图存档属于
-内部资料，不随本仓库发布。
 

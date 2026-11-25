@@ -88,6 +88,21 @@ Luma.exe --import-camera-runtime
 
 卸载不会删除 `%LOCALAPPDATA%\Luma\camera`；需要彻底清理时一并删除该目录。
 
+如果安装时本机没有 Bambu Studio，首次启动会检测运行库并提示打开官方下载页：
+
+```text
+https://bambulab.cn/zh-cn/download/studio
+```
+
+安装完成后无需重装 Luma：
+
+- 打开“设置 → 摄像头 → 运行库”；
+- 点“检测并导入”；
+- 成功后会显示“已导入（用户数据 camera/）”；
+- 也可直接使用 `Luma.exe --import-camera-runtime`。
+
+首次提示只出现一次，结果记录在 `%LOCALAPPDATA%\Luma\camera-setup-prompted`。
+
 ## 全量版（包含摄像头依赖）
 
 全量版把摄像头运行库放进安装目录的 `camera/`，应用启动时优先从这里加载，

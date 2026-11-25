@@ -229,6 +229,51 @@ pub fn self_check() -> Result<String, String> {
     ))
 }
 
+/// 当前摄像头运行库的加载来源；用于设置页和首次启动提示。
+pub fn runtime_status() -> String {
+    if let Some(dir) = bundled_camera_dir() {
+        if dir.join("BambuSource.dll").is_file() && find_dll(&dir, "avcodec-").is_some() {
+            return "已内置（安装目录 camera/）".to_string();
+        }
+    }
+    if let Some(dir) = imported_camera_dir() {
+        if dir.join("BambuSource.dll").is_file() && find_dll(&dir, "avcodec-").is_some() {
+            return "已导入（用户数据 camera/）".to_string();
+        }
+    }
+    if local_bambu_plugin_dir().is_some() && local_bambu_studio_dir().is_some() {
+        return "使用本机 Bambu Studio".to_string();
+    }
+    "未检测到 Bambu Studio".to_string()
+}
+
+pub fn runtime_available() -> bool {
+    runtime_status() != "未检测到 Bambu Studio"
+}
+
+pub fn should_prompt_setup() -> bool {
+    !runtime_available()
+        && setup_marker_path()
+            .map(|path| !path.exists())
+            .unwrap_or(true)
+}
+
+pub fn mark_setup_prompted() {
+    let Some(path) = setup_marker_path() else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(path, b"1");
+}
+
+fn setup_marker_path() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .map(|base| base.join("Luma").join("camera-setup-prompted"))
+}
+
 /// 从用户本机已安装的 Bambu Studio 复制摄像头依赖到 Luma 用户数据目录。
 ///
 /// 不随 Luma 分发第三方二进制；只在用户自己的机器上做本地复制。
@@ -799,9 +844,16 @@ unsafe impl Send for BambuApi {}
 unsafe impl Sync for BambuApi {}
 
 fn load_bambu() -> Result<Arc<BambuApi>, CameraError> {
-    static API: OnceLock<Result<Arc<BambuApi>, String>> = OnceLock::new();
-    match API.get_or_init(|| load_bambu_inner().map(Arc::new).map_err(|e| e.to_string())) {
-        Ok(api) => Ok(api.clone()),
+    static API: OnceLock<Arc<BambuApi>> = OnceLock::new();
+    if let Some(api) = API.get() {
+        return Ok(api.clone());
+    }
+    match load_bambu_inner() {
+        Ok(api) => {
+            let api = Arc::new(api);
+            let _ = API.set(api.clone());
+            Ok(api)
+        }
         Err(error) => {
             tracing::warn!(%error, "BambuSource unavailable");
             Err(CameraError::PluginMissing)
@@ -1003,9 +1055,16 @@ unsafe impl Send for FfmpegApi {}
 unsafe impl Sync for FfmpegApi {}
 
 fn load_ffmpeg() -> Result<Arc<FfmpegApi>, CameraError> {
-    static API: OnceLock<Result<Arc<FfmpegApi>, String>> = OnceLock::new();
-    match API.get_or_init(|| load_ffmpeg_inner().map(Arc::new).map_err(|e| e.to_string())) {
-        Ok(api) => Ok(api.clone()),
+    static API: OnceLock<Arc<FfmpegApi>> = OnceLock::new();
+    if let Some(api) = API.get() {
+        return Ok(api.clone());
+    }
+    match load_ffmpeg_inner() {
+        Ok(api) => {
+            let api = Arc::new(api);
+            let _ = API.set(api.clone());
+            Ok(api)
+        }
         Err(error) => {
             tracing::warn!(%error, "FFmpeg unavailable");
             Err(CameraError::DecoderMissing)
